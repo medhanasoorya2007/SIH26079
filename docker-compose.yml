@@ -1,0 +1,16 @@
+# docker compose up --build   ->  API http://localhost:8000/docs , dashboard http://localhost:3000
+# Serves the committed offline sample (data/sample/wb2); mount data/ to serve a full local build.
+services:
+  api:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    ports: ["8000:8000"]
+    environment:
+      BUSTGUARD_SOURCE: wb2
+    # volumes: ["./data:/app/data"]   # uncomment to serve data/artifacts from a local pipeline run
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args: { NEXT_PUBLIC_API_BASE: "http://localhost:8000" }
+    ports: ["3000:3000"]
+    depends_on: [api]

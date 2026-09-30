@@ -18,6 +18,7 @@ feature/<name>   your work, branched off dev
 
 ```bash
 make lint test            # ruff + pytest (+ eslint for the frontend)
+cd frontend && npm run typecheck && npm run build
 python scripts/scan_repo.py   # staged files: no secrets, nothing > 20 MB
 ```
 
@@ -38,7 +39,8 @@ class Cape(Signal):
     description = "Forecast CAPE: deep convection makes rainfall amounts unpredictable."
     requires = ("ctx_cape",)          # raw/context columns you need
     order = 50                        # run after the signals you depend on
-    explanations = {"sig_cape": "High instability forecast (CAPE {value:.0f} J/kg): convective rain is hit-or-miss."}
+    family = "moisture"               # disagreement|spread|drift|pressure_wind|moisture|upstream|regime|context
+    explanations = {"sig_cape": "High instability forecast (CAPE {value:.0f} J/kg) is associated with hit-or-miss convective rain."}
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:
         return pd.DataFrame({"sig_cape": df["ctx_cape"]}, index=df.index)
@@ -48,7 +50,10 @@ It is discovered automatically, used as a model feature, and its sentence appear
 dashboard whenever it is among the top-3 reasons. Rules:
 
 * output columns must start with `sig_`;
-* never use the row's own `obs` (that is the future);
+* only use information available at issue time: never the row's own `obs`, and verified
+  observations only up to `ctx.verification_lag_days` before the issue date
+  (`tests/test_features.py::test_no_signal_uses_unverified_observations` audits this);
+* explanation wording is associative ("associated with"), never causal;
 * fit any climatology on `ctx.fit_mask` rows only (training years);
 * add a test in `backend/tests/test_features.py`.
 
