@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 
 ANALOG_TEMPLATES = {
@@ -20,7 +21,7 @@ ANALOG_TEMPLATES = {
 UNITS = {"rain": "mm", "tmax": "degC"}
 
 
-def _fmt(template: str, value: float, row: pd.Series, region_name: str) -> str:
+def _fmt(template: str, value: float, row, region_name: str) -> str:
     unit = UNITS.get(str(row.get("variable", "rain")), "")
     try:
         return template.format(
@@ -62,3 +63,48 @@ def top_reasons(
         if len(reasons) >= n:
             break
     return reasons
+
+
+def reasons_batch(
+    contrib: np.ndarray,
+    values: np.ndarray,
+    features: list[str],
+    templates: dict,
+    medians: dict,
+    region_names: list[str],
+    variables: list[str],
+    leads: list[int],
+    n: int = 3,
+) -> list[list[dict]]:
+    """Vectorised version of :func:`top_reasons` for many forecasts (export step)."""
+    order = np.argsort(-contrib, axis=1)
+    out: list[list[dict]] = []
+    for i in range(contrib.shape[0]):
+        reasons: list[dict] = []
+        seen: set[str] = set()
+        ctx = {"variable": variables[i], "lead_day": leads[i]}
+        for j in order[i]:
+            c = contrib[i, j]
+            if c <= 0 or len(reasons) >= n:
+                break
+            feat = features[j]
+            tpl = templates.get(feat)
+            x = values[i, j]
+            if tpl is None or not np.isfinite(x):
+                continue
+            if isinstance(tpl, dict):
+                tpl = tpl["high"] if x >= medians.get(feat, 0.0) else tpl["low"]
+            text = _fmt(tpl, float(x), ctx, region_names[i])
+            if text in seen:
+                continue
+            seen.add(text)
+            reasons.append(
+                {
+                    "feature": feat,
+                    "text": text,
+                    "contribution": round(float(c), 4),
+                    "value": float(x),
+                }
+            )
+        out.append(reasons)
+    return out
