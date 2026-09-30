@@ -66,6 +66,28 @@ def _category_flip(df: pd.DataFrame, spec: dict) -> tuple[pd.Series, dict]:
     return lab, {"thresholds": thr.tolist(), "count": count}
 
 
+def imd_category(mm, edges=(64.5, 115.6, 204.5)) -> np.ndarray:
+    """IMD warning category index: 0 light/moderate, 1 heavy, 2 very heavy, 3 extremely heavy."""
+    return np.digitize(np.asarray(mm, dtype=float), np.asarray(edges, dtype=float))
+
+
+def _imd_category(df: pd.DataFrame, spec: dict) -> tuple[pd.Series, dict]:
+    edges = spec.get("edges", [64.5, 115.6, 204.5])
+    fc_c = imd_category(df["fc"], edges)
+    ob_c = imd_category(df["obs"], edges)
+    gap = np.abs(ob_c - fc_c) >= spec.get("min_category_gap", 2)
+    heavy = spec.get("missed_warning_from", 1)
+    missed = (ob_c >= heavy) & (fc_c < heavy)
+    lab = pd.Series((gap | missed).astype(float), index=df.index)
+    lab[(df["variable"] != spec["variable"]) | df["obs"].isna() | df["fc"].isna()] = np.nan
+    return lab, {
+        "edges": list(edges),
+        "names": spec.get("names"),
+        "min_category_gap": spec.get("min_category_gap", 2),
+        "missed_warning_from": heavy,
+    }
+
+
 def _absolute_error(df: pd.DataFrame, spec: dict) -> tuple[pd.Series, dict]:
     lab = (df["abs_error"] >= spec["threshold"]).astype(float)
     lab[(df["variable"] != spec["variable"]) | df["abs_error"].isna()] = np.nan
@@ -84,6 +106,8 @@ def make_labels(df: pd.DataFrame, fit_mask: pd.Series, config: dict | None = Non
         kind = spec["kind"]
         if kind == "percentile_error":
             labels[name], thresholds[name] = _percentile_error(df, spec, fit_mask)
+        elif kind == "imd_category":
+            labels[name], thresholds[name] = _imd_category(df, spec)
         elif kind == "category_flip":
             labels[name], thresholds[name] = _category_flip(df, spec)
         elif kind == "absolute_error":

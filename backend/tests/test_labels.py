@@ -60,3 +60,46 @@ def test_unverified_rows_are_nan_and_any_of_combines():
     assert np.isnan(labs["bust_category_flip"].iloc[0])
     assert labs["bust_decision"].iloc[1] == 1.0
     assert np.isnan(labs["bust_tmax_error"]).all()  # not applicable to rain
+
+
+IMD_CFG = {
+    "default": "imd_category",
+    "definitions": {
+        "imd_category": {
+            "kind": "imd_category",
+            "variable": "rain",
+            "edges": [64.5, 115.6, 204.5],
+            "min_category_gap": 2,
+            "missed_warning_from": 1,
+        },
+        "tmax_error": {"kind": "absolute_error", "variable": "tmax", "threshold": 3.0},
+    },
+}
+
+
+def test_imd_category_boundaries():
+    from ml.labels.bust import imd_category
+
+    assert imd_category([64.4, 64.5, 115.5, 115.6, 204.4, 204.5]).tolist() == [0, 1, 1, 2, 2, 3]
+
+
+def test_imd_category_bust_rules():
+    # fc, obs -> expected
+    cases = [
+        (10.0, 70.0, 1.0),  # missed warning: obs Heavy, fc below Heavy
+        (70.0, 120.0, 0.0),  # Heavy vs Very heavy: 1 class apart, warning was issued
+        (70.0, 210.0, 1.0),  # Heavy vs Extremely heavy: 2 classes apart
+        (130.0, 20.0, 1.0),  # Very heavy forecast, light observed: 2 classes (false alarm)
+        (70.0, 20.0, 0.0),  # Heavy forecast, light observed: 1 class only
+        (5.0, 60.0, 0.0),  # both Light/Moderate
+    ]
+    df = add_errors(_df(np.array([c[0] for c in cases]), np.array([c[1] for c in cases])))
+    lab = make_labels(df, df["split"] == "train", IMD_CFG).labels["bust"]
+    assert lab.tolist() == [c[2] for c in cases]
+
+
+def test_tmax_bust_threshold():
+    df = add_errors(_df(np.array([40.0, 40.0, 40.0]), np.array([37.0, 37.5, 44.0]), var="tmax"))
+    labs = make_labels(df, df["split"] == "train", IMD_CFG).labels
+    assert labs["bust_tmax_error"].tolist() == [1.0, 0.0, 1.0]
+    assert labs["bust_imd_category"].isna().all()
