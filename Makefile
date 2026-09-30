@@ -5,13 +5,14 @@
 #   make eval           model vs baseline report -> docs/results*.md
 #   make export         API payloads (predictions, reasons, analogs, replay events)
 #   make api / web      run the FastAPI backend / React dashboard
-#   make demo           export (if needed) and run api + web together
+#   make demo           reproduce headline numbers offline, then run api + web
+#   make headline       only reproduce the headline numbers (offline, from cached data)
 #   make synthetic      full pipeline on clearly-labelled SYNTHETIC data
 SOURCE ?= wb2
 UV     ?= uv
 PY      = cd backend && $(UV) run python
 
-.PHONY: setup fetch fetch-dry dataset train eval export pipeline synthetic api web demo test lint fmt scan
+.PHONY: setup fetch fetch-dry dataset train eval events export pipeline synthetic api web demo headline test lint fmt scan
 
 setup:
 	cd backend && $(UV) sync --group dev
@@ -33,9 +34,12 @@ eval:
 	$(PY) -m pipelines.evaluate --source $(SOURCE)
 
 export:
-	$(PY) -m pipelines.export --source $(SOURCE)
+	$(PY) -m pipelines.export --source $(SOURCE) $(if $(filter wb2,$(SOURCE)),--sample,)
 
-pipeline: dataset train eval export
+events:
+	$(PY) -m pipelines.check_events --source $(SOURCE)
+
+pipeline: dataset train eval events export
 
 synthetic:
 	$(MAKE) pipeline SOURCE=synthetic
@@ -47,7 +51,10 @@ web:
 	cd frontend && npm run dev
 
 demo:
-	$(PY) -m pipelines.demo
+	$(PY) -m pipelines.demo --source $(SOURCE)
+
+headline:
+	$(PY) -m pipelines.demo --source $(SOURCE) --no-serve
 
 test:
 	cd backend && $(UV) run pytest -q

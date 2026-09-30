@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Query
 
-from app.services.store import DataStore, available_sources, get_store
+from app.services.store import DataStore, available_sources, get_store, num  # noqa: F401
 
 
 def store_dep(
@@ -20,12 +20,3 @@ def store_dep(
         ) from exc
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
-
-
-def num(x) -> float | None:
-    """JSON-safe float (NaN/inf -> None)."""
-    try:
-        f = float(x)
-    except (TypeError, ValueError):
-        return None
-    return None if f != f or f in (float("inf"), float("-inf")) else round(f, 4)
