@@ -29,7 +29,7 @@ class ForecastIntensity(Signal):
     family = "context"
     explanations = {
         "sig_fc": {
-            "high": "Forecast rainfall of {value:.0f} {unit} over {region}: intense forecasts are associated with the largest errors.",
+            "high": "Forecast of {value:.0f} {unit} over {region}: forecasts in this range are associated with missed heavy-rain days.",
             "low": "Forecast rainfall is modest ({value:.0f} {unit}) in a setting associated with missed heavy rain.",
         },
         "sig_fc_clim_ratio": {
