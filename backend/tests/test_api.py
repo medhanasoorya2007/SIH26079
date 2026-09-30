@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services import store as st
 
+
 def _v2_artifacts() -> bool:
     import json
 

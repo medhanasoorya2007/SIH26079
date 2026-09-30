@@ -1,0 +1,44 @@
+# Trace-pathway templates per regime (v2 #13).
+# A pathway is shown only with the steps whose feature family the model actually flagged
+# for that forecast (family share >= min_family_pct of the bust-raising SHAP). Steps keep
+# the physical order below; the final step is always appended. Wording is associative.
+min_family_pct: 10
+final: "Rainfall error over {region}"
+
+pathways:
+  Monsoon depression:
+    - {family: upstream, text: "Depression / low over the Bay of Bengal upstream"}
+    - {family: pressure_wind, text: "Cyclonic circulation and wind shift near the region"}
+    - {family: moisture, text: "Moisture transport into the region"}
+    - {family: spread, text: "Successive runs disagree on the track"}
+    - {family: drift, text: "Rain shield shifts between runs"}
+  Cyclone / deep low:
+    - {family: upstream, text: "Deep low / cyclone offshore"}
+    - {family: pressure_wind, text: "Tight pressure gradient and strong winds"}
+    - {family: spread, text: "Track and landfall timing uncertain across runs"}
+    - {family: moisture, text: "High moisture loading at landfall"}
+    - {family: drift, text: "Landfall rain moves between runs"}
+  Western disturbance:
+    - {family: upstream, text: "Trough approaching from the west"}
+    - {family: pressure_wind, text: "Pressure fall and wind shift over NW India"}
+    - {family: moisture, text: "Interaction with monsoon moisture"}
+    - {family: drift, text: "Timing shifts between runs"}
+  Active monsoon:
+    - {family: moisture, text: "Deep monsoon moisture over the region"}
+    - {family: pressure_wind, text: "Strong westerly monsoon flow"}
+    - {family: upstream, text: "Organised convection upstream"}
+    - {family: spread, text: "Runs disagree on where the heaviest bands set up"}
+  Break monsoon:
+    - {family: pressure_wind, text: "Weak or shifted monsoon flow"}
+    - {family: regime, text: "Break spell: revival timing is uncertain"}
+    - {family: drift, text: "Runs flip between revival and continued break"}
+    - {family: moisture, text: "Moisture returning faster/slower than forecast"}
+  Heavy rainfall:
+    - {family: moisture, text: "High moisture loading"}
+    - {family: upstream, text: "Rain-bearing system upstream"}
+    - {family: spread, text: "Runs disagree on the amount"}
+  Normal:
+    - {family: context, text: "Location / season with a history of misses"}
+    - {family: spread, text: "Successive runs disagree"}
+    - {family: drift, text: "Forecast drifting between runs"}
+    - {family: moisture, text: "Moisture anomaly at issue time"}
