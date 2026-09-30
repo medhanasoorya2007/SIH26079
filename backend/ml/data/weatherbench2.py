@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import contextlib
 import json
 import threading
 import time
@@ -44,7 +45,12 @@ GB = 1e9
 
 # --------------------------------------------------------------------------- ledger
 class ByteLedger:
-    """Thread-safe, persisted running total of transferred bytes."""
+    """Thread-safe, persisted running total of transferred bytes.
+
+    Each downloader process owns one ledger file (``_ledger*.json`` in data/raw/wb2); the
+    cap is checked against the sum of ALL ledger files, so parallel downloads (WeatherBench 2
+    and IMD) share one byte budget without overwriting each other's counts.
+    """
 
     def __init__(self, path: Path, cap_bytes: float):
         self.path = path
@@ -55,8 +61,18 @@ class ByteLedger:
             self.data.update(json.loads(path.read_text()))
 
     @property
-    def total(self) -> int:
+    def own_total(self) -> int:
         return int(self.data["total_bytes"])
+
+    @property
+    def total(self) -> int:
+        """Bytes transferred by all downloaders (this ledger + sibling ledger files)."""
+        other = 0
+        for f in self.path.parent.glob("_ledger*.json"):
+            if f.resolve() != self.path.resolve():
+                with contextlib.suppress(OSError, ValueError, KeyError):
+                    other += int(json.loads(f.read_text())["total_bytes"])
+        return self.own_total + other
 
     def add(self, source: str, nbytes: int) -> None:
         with self._lock:
@@ -226,24 +242,32 @@ class Planner:
             self._stores[path] = ChunkStore(self.fs, self.cfg["bucket"], path, source, self.ledger)
         return self._stores[path]
 
-    def forecast_paths(self, year: int) -> dict[str, str]:
-        out = {"hres": self.cfg["stores"]["hres"]["path"]}
-        gc = self.cfg["stores"]["graphcast"]["path_by_year"]
-        if year in gc:
-            out["graphcast"] = gc[year]
-        return out
+    def forecast_path(self, source: str, year: int) -> str | None:
+        st = self.cfg["stores"][source]
+        if "path_by_year" in st:
+            return st["path_by_year"].get(year)
+        return st["path"]
 
     def plan(self, phase: dict) -> list[Unit]:
+        """Units for one phase. A phase declares:
+        ``forecast: {source: [vars]}`` fetched for ``lead_days`` of every JJAS 00 UTC run,
+        ``era5_valid: [vars]`` at the end of each lead-day window (truth-like), and
+        ``era5_init: [vars]`` at each initialisation time (state known at issue time)."""
         units: list[Unit] = []
         hour = self.cfg["init_hour_utc"]
         valid_dates: set[date] = set()
+        init_dates: set[date] = set()
         for year in phase["seasons"]:
             inits = _season_inits(year, self.cfg["season_months"])
-            for source, path in self.forecast_paths(year).items():
+            init_dates.update(inits)
+            for source, variables in (phase.get("forecast") or {}).items():
+                path = self.forecast_path(source, year)
+                if path is None:
+                    continue
                 st = self.store(source, path)
                 times = st.coord("time")
                 leads = st.coord("prediction_timedelta")
-                for var in self.cfg["forecast_variables"]:
+                for var in variables:
                     zarray, dims = st.array_meta(var)
                     t_ax, l_ax = dims.index("time"), dims.index("prediction_timedelta")
                     lead_chunks = sorted(
@@ -272,32 +296,35 @@ class Planner:
                                 Unit(source, path, var, tuple(idx), out, f"{init:%Y-%m}", init)
                             )
             for init in inits:
-                for d in phase["lead_days"]:
+                for d in phase.get("lead_days", []):
                     # rain day covered by lead day d: (init + d-1 days, init + d days]
                     valid_dates.add(init + timedelta(days=d - 1))
-        units += self._era5_units(sorted(valid_dates))
+        # truth-like fields: 24 h window ending 00 UTC the day after the rain day
+        ends = sorted(v + timedelta(days=1) for v in valid_dates)
+        units += self._era5_units(phase.get("era5_valid", []), ends)
+        # analysis state at issue time (00 UTC of each init)
+        units += self._era5_units(phase.get("era5_init", []), sorted(init_dates))
         return units
 
-    def _era5_units(self, valid_dates: list[date]) -> list[Unit]:
+    def _era5_units(self, variables: list[str], stamps: list[date]) -> list[Unit]:
+        if not variables:
+            return []
         path = self.cfg["stores"]["era5"]["path"]
         st = self.store("era5", path)
         times = st.coord("time")
         units = []
-        for var in self.cfg["truth_variables"]:
+        for var in variables:
             zarray, dims = st.array_meta(var)
             t_ax = dims.index("time")
             chunks = set()
-            for vd in valid_dates:
-                # 24 h accumulation ending at 00 UTC of the day after `vd` == rain on day vd
-                t64 = np.datetime64(datetime(vd.year, vd.month, vd.day)) + np.timedelta64(1, "D")
-                ti = np.where(times == t64)[0]
+            for d in stamps:
+                ti = np.where(times == np.datetime64(datetime(d.year, d.month, d.day)))[0]
                 if ti.size:
                     chunks.add(int(ti[0]) // zarray["chunks"][t_ax])
             for c in sorted(chunks):
                 idx = [0] * len(dims)
                 idx[t_ax] = c
-                t0 = times[c * zarray["chunks"][t_ax]]
-                month = str(t0)[:7]
+                month = str(times[c * zarray["chunks"][t_ax]])[:7]
                 out = UNITS_DIR / "era5" / var / month[:4] / f"t{c}.npz"
                 units.append(Unit("era5", path, var, tuple(idx), out, month))
         return units

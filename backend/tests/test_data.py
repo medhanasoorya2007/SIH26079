@@ -9,6 +9,11 @@ def test_byte_ledger_persists_and_caps(tmp_path):
     led.add("hres", 600)
     assert ByteLedger(p, 1000).total == 600  # resumed from disk
     assert led.would_exceed(401) and not led.would_exceed(400)
+    # a sibling ledger (another downloader process) shares the same cap
+    ByteLedger(tmp_path / "_ledger_other.json", 1000).add("imd", 300)
+    led2 = ByteLedger(tmp_path / "_ledger.json", 1000)
+    led2.add("hres", 0)
+    assert led2.total == 300 and led2.would_exceed(701)
 
 
 def test_decode_cf_times_and_leads():
