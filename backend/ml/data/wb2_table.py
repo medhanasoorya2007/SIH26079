@@ -1,14 +1,19 @@
-"""Build the raw training table from the WeatherBench 2 monthly files (real data).
+"""Build the raw training table from WeatherBench 2 forecasts + IMD rain truth (v2, real data).
+
+One row = one HRES 00 UTC run x IMD subdivision x lead day (rain).
 
 Conventions
 -----------
-* Lead day d of a 00 UTC run covers the 24 h window (init + d-1 days, init + d days].
-  Its rain is ``total_precipitation_24hr`` at lead 24*d h; truth is ERA5
-  ``total_precipitation_24hr`` stamped at init + d days 00 UTC (same window).
-* ``valid_date`` = init + d-1 days (the rain day).
-* Context fields come from the HRES forecast itself (what a forecaster sees at issue time):
-  valid-day mean MSLP, geostrophic vorticity from the MSLP Laplacian, box minima/means.
-* Only lead days present in the downloaded chunks are emitted (e.g. 1-7 and 10).
+* Lead day d of a 00 UTC run covers (init + d-1 days, init + d days]; its rain is HRES
+  ``total_precipitation_24hr`` at lead 24*d h. ``valid_date`` = init + d-1 days.
+* Truth = IMD 0.25 deg gridded rainfall, subdivision area-mean (cos-lat weighted). The IMD
+  day is aligned with ``imd.day_offset`` (configs/data.yaml), chosen empirically by
+  ``pipelines.check_alignment`` (see docs/data.md). ERA5 is never used as rain truth.
+* Forecast fields are mapped to subdivisions by sending every IMD cell to its nearest
+  1.5 deg model cell (``ml.subdivisions.grid_weights``).
+* Context (what a forecaster has at issue time): HRES MSLP (valid-day mean), geostrophic
+  vorticity and wind from the MSLP field, rain/MSLP in an upstream box, and ERA5 analysis
+  total column water vapour at the initialisation time.
 """
 
 from __future__ import annotations
@@ -17,18 +22,27 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from ml.config import load_config
 from ml.data.weatherbench2 import MONTHLY_DIR
-from ml.regions import load_regions, nearest_index
+from ml.subdivisions import (
+    grid_weights,
+    imd_area_means,
+    load_partition,
+    region_centroids,
+    subdivision_table,
+)
 
-TP, MSLP = "total_precipitation_24hr", "mean_sea_level_pressure"
+TP, MSLP, TCWV = "total_precipitation_24hr", "mean_sea_level_pressure", "total_column_water_vapour"
 OMEGA, RHO = 7.292e-5, 1.2
-
 BOXES = {  # (lat_min, lat_max, lon_min, lon_max)
-    "bob": (12.0, 24.0, 82.0, 95.0),  # Bay of Bengal + east coast: depressions form/track here
-    "arb": (10.0, 24.0, 66.0, 74.0),  # Arabian Sea (east part inside the India box)
+    "bob": (12.0, 24.0, 82.0, 95.0),  # Bay of Bengal: monsoon lows/depressions form and track
+    "arb": (10.0, 24.0, 66.0, 74.0),  # eastern Arabian Sea: offshore trough / vortices
     "nw": (26.0, 34.0, 68.0, 78.0),  # NW India heat low / western disturbances
     "core": (18.0, 28.0, 69.0, 88.0),  # monsoon core zone (active / break)
 }
+# upstream box relative to the subdivision centre: monsoon systems travel west-north-west,
+# so "upstream" is to the east-south-east (deg)
+UPSTREAM = {"dlat": (-3.0, 0.5), "dlon": (2.0, 6.5)}
 
 
 def _open(source: str, var: str, years: list[int] | None = None) -> xr.DataArray | None:
@@ -39,105 +53,169 @@ def _open(source: str, var: str, years: list[int] | None = None) -> xr.DataArray
         return None
     dim = "time" if source == "era5" else "init_time"
     parts = []
-    for f in files:  # close each file immediately: the downloader may replace it on Windows
+    for f in files:  # close each file immediately (the downloader may replace it)
         with xr.open_dataset(f) as ds:
             parts.append(ds[var].load())
     da = xr.concat(parts, dim=dim, join="outer").sortby(dim)
     return da.isel({dim: ~da.get_index(dim).duplicated()})
 
 
-def _box(da: xr.DataArray, name: str) -> xr.DataArray:
-    la0, la1, lo0, lo1 = BOXES[name]
-    return da.sel(lat=slice(la0, la1), lon=slice(lo0, lo1))
+def _box_weights(lat: np.ndarray, lon: np.ndarray, boxes: list[tuple]) -> np.ndarray:
+    """Row-normalised cos-lat weights (n_boxes, n_lat*n_lon) for lat/lon boxes."""
+    glat, glon = np.meshgrid(lat, lon, indexing="ij")
+    W = np.zeros((len(boxes), glat.size))
+    for k, (a, b, c, d) in enumerate(boxes):
+        m = (glat >= a) & (glat <= b) & (glon >= c) & (glon <= d)
+        W[k] = (m * np.cos(np.deg2rad(glat))).ravel()
+    s = W.sum(1, keepdims=True)
+    return np.divide(W, s, out=np.zeros_like(W), where=s > 0)
 
 
-def geostrophic_vorticity(mslp_hpa: xr.DataArray) -> xr.DataArray:
-    """zeta_g = lap(p) / (rho f) in 1e-5 s^-1 (NaN within 8 deg of the equator)."""
-    p = mslp_hpa * 100.0
-    lat = np.deg2rad(p["lat"])
-    dy = 111_195.0 * float(np.abs(np.diff(p["lat"].values)).mean())
-    dx = dy * np.cos(lat)
-    d2y = (p.shift(lat=-1) - 2 * p + p.shift(lat=1)) / dy**2
-    d2x = (p.shift(lon=-1) - 2 * p + p.shift(lon=1)) / dx**2
-    f = 2 * OMEGA * np.sin(lat)
-    zeta = (d2x + d2y) / (RHO * f) * 1e5
-    return zeta.where(np.abs(p["lat"]) >= 8.0)
+def _geostrophic(p_hpa: np.ndarray, lat: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(vorticity 1e-5 s^-1, u_g m/s, v_g m/s) from MSLP[..., lat, lon] on a regular grid."""
+    p = p_hpa * 100.0
+    dy = 111_195.0 * float(np.abs(np.diff(lat)).mean())
+    coslat = np.cos(np.deg2rad(lat))[:, None]
+    dx = dy * coslat
+    f = (2 * OMEGA * np.sin(np.deg2rad(lat)))[:, None]
+    f = np.where(np.abs(lat)[:, None] >= 8.0, f, np.nan)
+    dpdy = np.gradient(p, axis=-2) / dy
+    dpdx = np.gradient(p, axis=-1) / dx
+    lap = np.gradient(dpdy, axis=-2) / dy + np.gradient(dpdx, axis=-1) / dx
+    return lap / (RHO * f) * 1e5, -dpdy / (RHO * f), dpdx / (RHO * f)
 
 
-def _window_mean(da: xr.DataArray, d: int) -> xr.DataArray:
-    """Mean over the 6-hourly leads inside day d's window that were downloaded."""
+def _window_mean(da: xr.DataArray, d: int) -> xr.DataArray | None:
     hours = da["lead_hour"].values
     sel = hours[(hours > 24 * (d - 1)) & (hours <= 24 * d)]
-    return da.sel(lead_hour=sel).mean("lead_hour") if len(sel) else da.isel(lead_hour=0) * np.nan
+    if not len(sel):
+        return None
+    out = da.sel(lead_hour=sel).mean("lead_hour")
+    return out if bool(out.notnull().any()) else None
 
 
 def available_lead_days(tp: xr.DataArray) -> list[int]:
     hours = set(tp["lead_hour"].values.tolist())
-    days = [d for d in range(1, 11) if float(24 * d) in hours]
-    return [d for d in days if bool(tp.sel(lead_hour=float(24 * d)).notnull().any())]
+    return [
+        d
+        for d in range(1, 11)
+        if float(24 * d) in hours and bool(tp.sel(lead_hour=float(24 * d)).notnull().any())
+    ]
+
+
+def imd_truth(years: list[int], part: dict) -> pd.DataFrame:
+    """IMD area-mean rain per subdivision, indexed by IMD date (columns = subdivision ids)."""
+    from ml.data import imd
+
+    frames = []
+    for y in years:
+        if not imd.year_path(y).exists():
+            continue
+        dates, rain = imd.load_year(y)
+        frames.append(
+            pd.DataFrame(
+                imd_area_means(rain, part["assign"], part["lat"]),
+                index=dates,
+                columns=subdivision_table().index,
+            )
+        )
+    if not frames:
+        raise SystemExit("no IMD rainfall files: run `make fetch SOURCE=imd`")
+    return pd.concat(frames).sort_index()
 
 
 def build(years: list[int] | None = None) -> pd.DataFrame:
-    regions = load_regions()
-    hres_tp, hres_p = _open("hres", TP, years), _open("hres", MSLP, years)
-    gc_tp = _open("graphcast", TP, years)
-    era = _open("era5", TP, years)
-    if hres_tp is None or era is None:
-        raise SystemExit("no WeatherBench 2 monthly files: run `make fetch` first")
+    cfg = load_config("data")
+    years = years or sorted({y for p in cfg["weatherbench2"]["phases"] for y in p["seasons"]})
+    offset = int(cfg["imd"].get("day_offset", 0))
+    part = load_partition()
+    subs = subdivision_table()
+    cents = region_centroids()
+    sub_ids = [s for s in subs.index if s in cents.index]
+    k_idx = [list(subs.index).index(s) for s in sub_ids]
 
-    hres_tp = hres_tp * 1000.0  # m -> mm
-    era = (era * 1000.0).clip(min=0.0)
-    hres_p = hres_p / 100.0 if hres_p is not None else None  # Pa -> hPa
-    lat, lon = hres_tp["lat"].values, hres_tp["lon"].values
-    li = nearest_index(lat, regions["lat"].values)
-    lo = nearest_index(lon, regions["lon"].values)
-    inits = pd.DatetimeIndex(hres_tp["init_time"].values)
-    n_r = len(regions)
+    tp = _open("hres", TP, years)
+    if tp is None:
+        raise SystemExit("no HRES monthly files: run `make fetch`")
+    tp = tp * 1000.0
+    mslp = _open("hres", MSLP, years)
+    mslp = mslp / 100.0 if mslp is not None else None
+    tcwv = _open("era5", TCWV, years)
+    lat, lon = tp["lat"].values, tp["lon"].values
+    W = grid_weights(part, lat, lon)[k_idx]  # (n_sub, n_cell)
+    Wb = _box_weights(lat, lon, list(BOXES.values()))  # (n_box, n_cell)
+    up_boxes = [
+        (
+            c.lat + UPSTREAM["dlat"][0],
+            c.lat + UPSTREAM["dlat"][1],
+            c.lon + UPSTREAM["dlon"][0],
+            c.lon + UPSTREAM["dlon"][1],
+        )
+        for _, c in cents.loc[sub_ids].iterrows()
+    ]
+    Wu = _box_weights(lat, lon, up_boxes)  # (n_sub, n_cell)
+    in_sub = W > 0
+
+    inits = pd.DatetimeIndex(tp["init_time"].values).normalize()
+    n_i, n_s = len(inits), len(sub_ids)
+    truth = imd_truth(years, part)[sub_ids]
     frames = []
-    for d in available_lead_days(hres_tp):
-        fc = hres_tp.sel(lead_hour=float(24 * d)).transpose("init_time", "lat", "lon")
-        grid = fc.values  # (init, lat, lon)
-        # 3x3 neighbourhood statistics around each region's cell
-        pad = np.pad(grid, ((0, 0), (1, 1), (1, 1)), mode="edge")
-        neigh = np.stack([pad[:, li + a, lo + b] for a in (0, 1, 2) for b in (0, 1, 2)], axis=-1)
-        rec = {
-            "fc": grid[:, li, lo],
-            "ctx_fc_neigh_mean": neigh.mean(-1),
-            "ctx_fc_neigh_std": neigh.std(-1),
-            "ctx_fc_neigh_max": neigh.max(-1),
-            "ctx_core_fc": np.repeat(_box(fc, "core").mean(("lat", "lon")).values[:, None], n_r, 1),
-        }
-        if gc_tp is not None and float(24 * d) in gc_tp["lead_hour"].values:
-            g = (gc_tp.sel(lead_hour=float(24 * d)) * 1000.0).reindex(init_time=fc["init_time"])
-            rec["fc_alt"] = g.transpose("init_time", "lat", "lon").values[:, li, lo]
-        if hres_p is not None:
-            pm = _window_mean(hres_p.reindex(init_time=fc["init_time"]), d).transpose(
-                "init_time", "lat", "lon"
+    for d in available_lead_days(tp):
+        x = (
+            tp.sel(lead_hour=float(24 * d))
+            .transpose("init_time", "lat", "lon")
+            .values.reshape(n_i, -1)
+        )
+        x = np.where(np.isfinite(x), x, np.nan)
+        fc = x @ W.T
+        rec: dict[str, np.ndarray] = {"fc": fc}
+        rec["ctx_fc_sub_std"] = np.sqrt(np.clip((x**2) @ W.T - fc**2, 0, None))
+        rec["ctx_fc_sub_max"] = np.stack(
+            [np.nanmax(np.where(in_sub[k], x, -np.inf), axis=1) for k in range(n_s)], 1
+        )
+        rec["ctx_up_fc"] = x @ Wu.T
+        box = x @ Wb.T
+        rec["ctx_core_fc"] = np.repeat(box[:, [3]], n_s, 1)
+        if mslp is not None:
+            pm = _window_mean(mslp.reindex(init_time=tp["init_time"]), d)
+            if pm is not None:
+                p = pm.transpose("init_time", "lat", "lon").values
+                vort, ug, vg = _geostrophic(p, lat)
+                pf = p.reshape(n_i, -1)
+                rec["ctx_mslp"] = pf @ W.T
+                rec["ctx_geo_vort"] = np.nan_to_num(vort.reshape(n_i, -1)) @ W.T
+                rec["ctx_geo_u"] = np.nan_to_num(ug.reshape(n_i, -1)) @ W.T
+                rec["ctx_geo_v"] = np.nan_to_num(vg.reshape(n_i, -1)) @ W.T
+                rec["ctx_up_mslp"] = pf @ Wu.T
+                la, lo = np.meshgrid(lat, lon, indexing="ij")
+                for name, (a, b, c, e) in BOXES.items():
+                    m = ((la >= a) & (la <= b) & (lo >= c) & (lo <= e)).ravel()
+                    if name in ("bob", "arb"):
+                        rec[f"ctx_{name}_min_mslp"] = np.repeat(
+                            np.nanmin(pf[:, m], 1)[:, None], n_s, 1
+                        )
+                    elif name == "nw":
+                        rec["ctx_nw_mslp"] = np.repeat(np.nanmean(pf[:, m], 1)[:, None], n_s, 1)
+        if tcwv is not None:
+            tw = (
+                tcwv.reindex(time=tp["init_time"].values)
+                .transpose("time", "lat", "lon")
+                .values.reshape(n_i, -1)
             )
-            vort = geostrophic_vorticity(pm).transpose("init_time", "lat", "lon")
-            rec["ctx_mslp"] = pm.values[:, li, lo]
-            rec["ctx_geo_vort"] = vort.values[:, li, lo]
-            for name, col, how in [
-                ("bob", "ctx_bob_min_mslp", "min"),
-                ("arb", "ctx_arb_min_mslp", "min"),
-                ("nw", "ctx_nw_mslp", "mean"),
-            ]:
-                v = getattr(_box(pm, name), how)(("lat", "lon")).values
-                rec[col] = np.repeat(v[:, None], n_r, 1)
-        # truth: ERA5 24 h total ending at init + d days 00 UTC
-        t_end = inits + pd.Timedelta(days=d)
-        ob = era.reindex(time=t_end.values).transpose("time", "lat", "lon").values
-        rec["obs"] = ob[:, li, lo]
-        df = pd.DataFrame({k: np.asarray(v).reshape(-1) for k, v in rec.items()})
-        df["init_date"] = np.repeat(inits.normalize(), n_r)
-        df["region_id"] = np.tile(regions.index.values, len(inits))
+            rec["ctx_tcwv"] = tw @ W.T
+            rec["ctx_up_tcwv"] = tw @ Wu.T
+        valid = inits + pd.Timedelta(days=d - 1)
+        rec["obs"] = truth.reindex(valid + pd.Timedelta(days=offset)).to_numpy()
+        df = pd.DataFrame({k: np.asarray(v, dtype="float32").reshape(-1) for k, v in rec.items()})
+        df["init_date"] = np.repeat(inits, n_s)
+        df["region_id"] = np.tile(sub_ids, n_i)
         df["lead_day"] = d
         frames.append(df)
     out = pd.concat(frames, ignore_index=True)
     out["variable"] = "rain"
     out["valid_date"] = out["init_date"] + pd.to_timedelta(out["lead_day"] - 1, unit="D")
-    out = out.merge(regions[["lat", "lon", "zone"]], left_on="region_id", right_index=True)
+    meta = cents.loc[sub_ids, ["lat", "lon"]].join(subs[["zone"]])
+    out = out.merge(meta, left_on="region_id", right_index=True)
     out["source"], out["is_synthetic"] = "wb2", False
-    if "fc_alt" not in out:
-        out["fc_alt"] = np.nan
+    out["fc_alt"] = np.nan  # GraphCast disagreement is out of v2 scope
     return out.dropna(subset=["fc"]).reset_index(drop=True)
