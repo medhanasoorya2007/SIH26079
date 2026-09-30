@@ -12,11 +12,14 @@ import pandas as pd
 
 from ml.features.base import Signal, SignalContext, register
 
-DEPRESSION_ANOM_HPA = -4.0  # Bay of Bengal min MSLP anomaly for a depression-like low
-CYCLONE_MIN_MSLP_HPA = 996.0  # deep low: cyclonic storm range
+# Thresholds are anomalies of the basin-box minimum MSLP vs the training climatology (same
+# lead, month). On the 1.5 deg grid, -4 hPa occurs on ~10% of JJAS days (depressions/lows),
+# -7 hPa on ~2% (deep depressions / cyclonic storms).
+DEPRESSION_ANOM_HPA = -4.0
+CYCLONE_ANOM_HPA = -7.0
 HEAVY_RAIN_MM = 64.5
 ACTIVE_RATIO, BREAK_RATIO = 1.5, 0.5  # core-zone forecast rain vs training climatology
-WD_ANOM_HPA = -3.0
+WD_ANOM_HPA = -4.0
 HEATWAVE_TMAX_C = 40.0
 
 REGIME_NAMES = {
@@ -53,9 +56,8 @@ class Regime(Signal):
         f = lambda c: df[c].to_numpy(dtype=float) if c in df else np.full(n, np.nan)  # noqa: E731
         is_rain = (df["variable"] == "rain").to_numpy()
         bob_anom, arb_anom = f("sig_bob_low_anom"), f("sig_arb_low_anom")
-        bob_min, arb_min = f("ctx_bob_min_mslp"), f("ctx_arb_min_mslp")
         tags = {
-            "sig_regime_cyclone": (np.fmin(bob_min, arb_min) < CYCLONE_MIN_MSLP_HPA),
+            "sig_regime_cyclone": (np.fmin(bob_anom, arb_anom) <= CYCLONE_ANOM_HPA),
             "sig_regime_depression": (bob_anom <= DEPRESSION_ANOM_HPA)
             | (arb_anom <= DEPRESSION_ANOM_HPA),
             "sig_regime_heavy_rain": is_rain & (f("fc") >= HEAVY_RAIN_MM),

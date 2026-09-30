@@ -109,3 +109,73 @@ def to_jsonable(obj):
     if isinstance(obj, np.integer):
         return int(obj)
     return obj
+
+
+def threshold_at_far(y, p, far: float) -> float:
+    """Smallest probability threshold whose false-alarm rate (flag if p >= thr) is <= far.
+
+    Fitted on the CALIBRATION block and then frozen, so test-set operating points are honest.
+    """
+    y_, p_ = _clean(y, p)
+    neg = np.sort(p_[y_ == 0])
+    if len(neg) == 0:
+        return float("nan")
+    cands = np.unique(p_)
+    rates = 1.0 - np.searchsorted(neg, cands, side="left") / len(neg)  # share of negatives >= cand
+    ok = cands[rates <= far + 1e-12]
+    return float(ok.min()) if len(ok) else float(cands.max() + 1e-9)
+
+
+def operating_point(y, p, thr: float) -> dict:
+    """Contingency-table scores when flagging p >= thr (POD, POFD, precision, CSI)."""
+    y_, p_ = _clean(y, p)
+    flag = p_ >= thr
+    tp = int((flag & (y_ == 1)).sum())
+    fp = int((flag & (y_ == 0)).sum())
+    fn = int((~flag & (y_ == 1)).sum())
+    tn = int((~flag & (y_ == 0)).sum())
+    div = lambda a, b: float(a / b) if b else float("nan")  # noqa: E731
+    return {
+        "threshold": float(thr),
+        "recall": div(tp, tp + fn),
+        "far": div(fp, fp + tn),
+        "precision": div(tp, tp + fp),
+        "csi": div(tp, tp + fp + fn),
+        "n_flagged": tp + fp,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+    }
+
+
+def bootstrap_pr_auc(
+    y, scores: dict[str, np.ndarray], groups, n_boot: int = 300, seed: int = 0
+) -> dict:
+    """95% CIs of PR-AUC (and of each method minus the first) by resampling whole issue dates."""
+    y = np.asarray(y, dtype=float)
+    groups = np.asarray(groups)
+    uniq = np.unique(groups)
+    idx_by = {g: np.where(groups == g)[0] for g in uniq}
+    rng = np.random.default_rng(seed)
+    names = list(scores)
+    draws = {n: [] for n in names}
+    diffs = {n: [] for n in names[1:]}
+    for _ in range(n_boot):
+        pick = np.concatenate([idx_by[g] for g in rng.choice(uniq, len(uniq), replace=True)])
+        yb = y[pick]
+        if yb.sum() == 0:
+            continue
+        vals = {n: average_precision_score(yb, np.asarray(scores[n])[pick]) for n in names}
+        for n in names:
+            draws[n].append(vals[n])
+        for n in names[1:]:
+            diffs[n].append(vals[names[0]] - vals[n])
+
+    def ci(v):
+        return [float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5))] if v else [None, None]
+
+    return {
+        "n_boot": n_boot,
+        "pr_auc_ci": {n: ci(draws[n]) for n in names},
+        "diff_vs_first_ci": {n: ci(diffs[n]) for n in names[1:]},
+    }
