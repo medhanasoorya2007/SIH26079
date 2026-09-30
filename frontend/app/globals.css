@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------------------------------
+   BustGuard design tokens: Neumorphism (Soft UI). Defined once; Tailwind reads these.
+   Contrast was checked against --bg (#E0E5EC):
+     --fg 7.4:1 | --muted 4.9:1 | --risk-*-text >= 4.7:1 | --accent-text 5.4:1
+   (The brief's #6B7280 muted and the base risk hues measure < 4.5:1 on #E0E5EC, so text and
+   badges use the darkened *-text variants; base hues are used for fills, dials and the map.)
+   ------------------------------------------------------------------------------------------ */
+:root {
+  --bg: #e0e5ec;
+  --fg: #3d4852;
+  --muted: #5a6270;
+  --placeholder: #a0aec0;
+  --accent: #6c63ff;
+  --accent-light: #8b84ff;
+  --accent-text: #4b42d6;
+  --grid: #cbd2dc;
+
+  --risk-low: #2f9e8f;
+  --risk-medium: #c98a1b;
+  --risk-high: #d1493b;
+  --risk-cw: #6c63ff;
+  --risk-low-text: #1d6b61;
+  --risk-medium-text: #8a5a00;
+  --risk-high-text: #a12c21;
+  --cw-ring: rgba(108, 99, 255, 0.45);
+
+  --map-basemap: #e7ebf1;
+  --map-outline: rgba(61, 72, 82, 0.35);
+
+  --shadow-extruded: 9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5);
+  --shadow-extruded-hover: 12px 12px 20px rgba(163, 177, 198, 0.7), -12px -12px 20px rgba(255, 255, 255, 0.6);
+  --shadow-extruded-sm: 5px 5px 10px rgba(163, 177, 198, 0.6), -5px -5px 10px rgba(255, 255, 255, 0.5);
+  --shadow-inset: inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5);
+  --shadow-inset-deep: inset 10px 10px 20px rgba(163, 177, 198, 0.7), inset -10px -10px 20px rgba(255, 255, 255, 0.6);
+  --shadow-inset-sm: inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5);
+
+  --radius-card: 32px;
+  --radius-panel: 24px;
+  --radius-control: 16px;
+}
+
+html {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  :focus-visible {
+    outline: none;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* MapLibre controls inherit the soft UI */
+.maplibregl-ctrl-group {
+  background: var(--bg) !important;
+  border-radius: var(--radius-control) !important;
+  box-shadow: var(--shadow-extruded-sm) !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: none !important;
+}
+.maplibregl-ctrl-attrib {
+  background: transparent !important;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
