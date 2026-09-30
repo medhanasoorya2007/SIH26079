@@ -1,7 +1,14 @@
 # Model + evaluation settings.
-split:
-  test_years: [2022]        # latest year held out (time-based split; never shuffled)
-  # all earlier years are used for training; calibration uses out-of-fold (leave-one-year-out)
+split:                      # by year, never shuffled
+  train_years: [2018, 2019]         # model, scalers, climatologies, label thresholds
+  calibration_years: [2020]         # isotonic calibrators + baseline fits (train+calibration)
+  test_years: [2021, 2022]          # fully unseen: every number in docs/results.md
+  # replay-event windows (configs/replay_events.yaml) are excluded from train + calibration
+
+issue_time:
+  # IMD date D closes at 03 UTC on D, i.e. rain day D-1. At a 00 UTC issue on day I the
+  # newest verified rain day is I-2 (its IMD file closes at 03 UTC on I-1).
+  verification_lag_days: 2
 
 lightgbm:
   n_estimators: 400
@@ -19,11 +26,16 @@ lightgbm:
 calibration:
   method: isotonic          # isotonic | sigmoid
 
-baseline:
-  # Raw score used as the operational-style baseline. With WeatherBench 2 (no ENS members
-  # downloaded) this is HRES-vs-GraphCast disagreement; swap to `ens_spread` if available.
-  score_column: sig_disagreement_abs
-  name: HRES vs GraphCast disagreement
+baselines:
+  # v2 #5: both baselines are always reported next to BustGuard.
+  spread_iso:
+    kind: spread_isotonic
+    score_column: sig_spread
+    name: "Lagged-ensemble spread"
+  spread_lr:
+    kind: logistic
+    columns: [sig_spread, sig_lead_day]
+    name: "Logistic (spread + lead day)"
 
 eval:
   false_alarm_rates: [0.05, 0.10, 0.20]   # compare model vs baseline recall at these FARs
@@ -31,7 +43,7 @@ eval:
 
 analogs:
   k: 8
-  features: [fc, sig_fc_neigh_mean, sig_fc_neigh_std, sig_mslp_anom, sig_geo_vorticity, lead_day, doy_sin, doy_cos]
+  features: [fc, sig_spread, sig_fc_sub_std, sig_mslp_anom, sig_geo_vorticity, sig_tcwv_anom, sig_up_fc, sig_doy_sin, sig_doy_cos]
 
 risk_levels:               # bust probability -> operational risk level
   - {name: Low,      max: 0.15}

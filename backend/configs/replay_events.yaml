@@ -1,0 +1,33 @@
+# Candidate replay events (v2 #18). Each window (valid dates, inclusive) is EXCLUDED from
+# model training and calibration so the replay is out-of-sample. Whether an event is usable
+# is decided from data coverage by `pipelines.check_events` -> docs/replay_events.md.
+# Names/dates are public knowledge; every number shown in the app comes from the datasets.
+events:
+  - id: kerala_2018
+    title: Kerala floods (Aug 2018)
+    window: [2018-08-08, 2018-08-20]
+    regions: [kerala_mahe]
+  - id: chennai_2015
+    title: Chennai floods (Dec 2015)
+    window: [2015-11-30, 2015-12-03]
+    regions: [tamil_nadu]
+  - id: kerala_karnataka_2019
+    title: Kerala & Karnataka extreme rain (Aug 2019)
+    window: [2019-08-06, 2019-08-12]
+    regions: [kerala_mahe, coastal_karnataka, sik]
+  - id: nisarga_2020
+    title: Cyclone Nisarga landfall, Konkan (Jun 2020)
+    window: [2020-06-02, 2020-06-05]
+    regions: [konkan_goa, madhya_maharashtra]
+  - id: konkan_2021
+    title: Konkan & Madhya Maharashtra extreme rain (Jul 2021)
+    window: [2021-07-21, 2021-07-24]
+    regions: [konkan_goa, madhya_maharashtra]
+  - id: gulab_2021
+    title: Cyclone Gulab landfall, north Andhra/south Odisha (Sep 2021)
+    window: [2021-09-25, 2021-09-29]
+    regions: [coastal_ap, odisha, telangana, vidarbha, marathwada]
+  - id: assam_meghalaya_2022
+    title: Assam & Meghalaya extreme rain (Jun 2022)
+    window: [2022-06-14, 2022-06-18]
+    regions: [assam_meghalaya, shwb_sikkim]

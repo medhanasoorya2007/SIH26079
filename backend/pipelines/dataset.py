@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from ml.config import ensure_dirs, load_config
-from ml.features.base import SignalContext, compute_signals, feature_columns
+from ml.features.base import SignalContext, compute_signals, feature_columns, feature_families
 from ml.labels.bust import add_errors, make_labels
 from pipelines.common import artifact_dir, banner, raw_path, table_path
 
@@ -35,24 +35,46 @@ def build_raw(source: str) -> pd.DataFrame:
 
 
 def assign_split(df: pd.DataFrame) -> pd.Series:
-    test_years = set(load_config("model")["split"]["test_years"])
+    """'train' | 'calib' | 'test' | 'unused' by initialisation year (configs/model.yaml)."""
+    sp = load_config("model")["split"]
     years = pd.to_datetime(df["init_date"]).dt.year
-    return pd.Series(np.where(years.isin(test_years), "test", "train"), index=df.index)
+    out = np.full(len(df), "unused", dtype=object)
+    out[years.isin(sp["train_years"]).to_numpy()] = "train"
+    out[years.isin(sp["calibration_years"]).to_numpy()] = "calib"
+    out[years.isin(sp["test_years"]).to_numpy()] = "test"
+    return pd.Series(out, index=df.index)
+
+
+def holdout_events(df: pd.DataFrame) -> pd.Series:
+    """Replay-event id for rows whose valid date falls in an event window, else ''."""
+    ev = load_config("replay_events")["events"]
+    vd = pd.to_datetime(df["valid_date"])
+    out = pd.Series("", index=df.index, dtype=object)
+    for e in ev:
+        lo, hi = (pd.Timestamp(str(x)) for x in e["window"])
+        out[(vd >= lo) & (vd <= hi)] = e["id"]
+    return out
 
 
 def build_table(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     df = raw.sort_values(["init_date", "lead_day", "region_id", "variable"]).reset_index(drop=True)
     df["split"] = assign_split(df)
-    fit_mask = df["split"] == "train"
+    df["holdout_event"] = holdout_events(df)
+    # climatologies, scalers and label thresholds see training years only (never events)
+    fit_mask = (df["split"] == "train") & (df["holdout_event"] == "")
     df = add_errors(df)
     labels = make_labels(df, fit_mask)
     df = df.join(labels.labels)
-    df, signals = compute_signals(df, SignalContext(fit_mask=fit_mask))
+    lag = int(load_config("model")["issue_time"]["verification_lag_days"])
+    df, signals = compute_signals(df, SignalContext(fit_mask=fit_mask, verification_lag_days=lag))
     meta = {
         "signals": [{"name": s.name, "description": s.description} for s in signals],
         "features": feature_columns(df, signals),
+        "families": feature_families(df, signals),
         "label_thresholds": labels.thresholds,
         "default_label": load_config("labels")["default"],
+        "split": load_config("model")["split"],
+        "verification_lag_days": lag,
     }
     return df, meta
 
@@ -76,13 +98,12 @@ def main(argv: list[str] | None = None) -> None:
     (artifact_dir(args.source) / "dataset_meta.json").write_text(
         json.dumps(meta, indent=1, default=str)
     )
-    tr = table[table["split"] == "train"]
-    te = table[table["split"] == "test"]
+    counts = table.groupby("split")["bust"].agg(["size", "mean", "sum"])
     print(
-        f"[dataset] {args.source}: {len(table):,} rows ({len(tr):,} train / {len(te):,} test), "
-        f"{len(meta['features'])} features from {len(meta['signals'])} signals, "
-        f"bust rate train {tr['bust'].mean():.3f} / test {te['bust'].mean():.3f}"
+        f"[dataset] {args.source}: {len(table):,} rows, {len(meta['features'])} features "
+        f"from {len(meta['signals'])} signals; holdout-event rows: {(table['holdout_event'] != '').sum():,}"
     )
+    print(counts.rename(columns={"size": "rows", "mean": "bust_rate", "sum": "busts"}).to_string())
     print(f"[dataset] wrote {table_path(args.source)}")
 
 

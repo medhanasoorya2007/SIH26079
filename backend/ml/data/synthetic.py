@@ -74,7 +74,9 @@ def _dist_deg(lat1, lon1, lat2, lon2):
     return np.sqrt((lat1 - lat2) ** 2 + ((lon1 - lon2) * np.cos(np.deg2rad(lat1))) ** 2)
 
 
-def generate(years=(2020, 2021, 2022), lead_days=range(1, 11), seed: int = 7) -> pd.DataFrame:
+def generate(
+    years=(2018, 2019, 2020, 2021, 2022), lead_days=range(1, 11), seed: int = 7
+) -> pd.DataFrame:
     """Return a SYNTHETIC raw table (see ml/schema.py for the columns)."""
     rng = np.random.default_rng(seed)
     reg = load_regions().reset_index(drop=True)
@@ -88,6 +90,10 @@ def generate(years=(2020, 2021, 2022), lead_days=range(1, 11), seed: int = 7) ->
     # neighbours within 3.5 degrees (incl. self) for neighbourhood statistics
     dmat = _dist_deg(lat[:, None], lon[:, None], lat[None, :], lon[None, :])
     neigh = dmat <= 3.5
+    # "upstream" = regions 2-7 deg to the east-south-east (monsoon systems move WNW)
+    dlon = lon[None, :] - lon[:, None]
+    dlat = lat[None, :] - lat[:, None]
+    upstream = (dlon >= 2) & (dlon <= 7) & (dlat >= -3.5) & (dlat <= 1)
     leads = list(lead_days)
     rows = []
 
@@ -206,12 +212,17 @@ def generate(years=(2020, 2021, 2022), lead_days=range(1, 11), seed: int = 7) ->
                             )
                         )
                     rain, mslp, vort = expected(tt, iso_b, states)
+                    if mname == "fc":
+                        iso_b_primary = iso_b
                     rain = smooth * rain * np.exp(rng.normal(0, 0.12 + 0.03 * d, len(reg)))
                     models[mname] = (rain, mslp + rng.normal(0, 0.4, len(reg)), vort, states)
                 fc, mslp, vort, states = models["fc"]
-                nb_mean = np.array([fc[m].mean() for m in neigh])
                 nb_std = np.array([fc[m].std() for m in neigh])
                 nb_max = np.array([fc[m].max() for m in neigh])
+                up_fc = np.array([fc[m].mean() if m.any() else np.nan for m in upstream])
+                up_mslp = np.array([mslp[m].mean() if m.any() else np.nan for m in upstream])
+                # toy moisture at issue time: wetter in active phases and near lows (FAKE)
+                tcwv = 48 + 6 * iso[i] * core + 4 * (vort > 1) + rng.normal(0, 2, len(reg))
                 bob = [
                     s
                     for s in states
@@ -237,9 +248,18 @@ def generate(years=(2020, 2021, 2022), lead_days=range(1, 11), seed: int = 7) ->
                             "is_synthetic": True,
                             "ctx_mslp": np.round(mslp, 2),
                             "ctx_geo_vort": np.round(vort, 3),
-                            "ctx_fc_neigh_mean": nb_mean,
-                            "ctx_fc_neigh_std": nb_std,
-                            "ctx_fc_neigh_max": nb_max,
+                            "ctx_fc_sub_std": nb_std,
+                            "ctx_fc_sub_max": nb_max,
+                            "ctx_up_fc": up_fc,
+                            "ctx_up_mslp": up_mslp,
+                            "ctx_geo_u": 6.0
+                            + 3.0 * iso_b_primary * core
+                            + rng.normal(0, 1.5, len(reg)),
+                            "ctx_geo_v": rng.normal(0, 2.0, len(reg)),
+                            "ctx_tcwv": tcwv,
+                            "ctx_up_tcwv": np.array(
+                                [tcwv[m].mean() if m.any() else np.nan for m in upstream]
+                            ),
                             "ctx_bob_min_mslp": bob_min,
                             "ctx_arb_min_mslp": arb_min,
                             "ctx_core_fc": fc[core].mean(),

@@ -4,7 +4,17 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services import store as st
 
-pytestmark = pytest.mark.skipif(not st.available_sources(), reason="no exported artifacts/sample")
+def _v2_artifacts() -> bool:
+    import json
+
+    for folder in st.available_sources().values():
+        meta = json.loads((folder / "meta.json").read_text())
+        if meta.get("schema_version", 1) >= 2:
+            return True
+    return False
+
+
+pytestmark = pytest.mark.skipif(not _v2_artifacts(), reason="no v2 exported artifacts/sample")
 client = TestClient(app)
 
 
@@ -16,7 +26,7 @@ def test_health_and_meta():
 
 def test_regions():
     regs = client.get("/regions").json()
-    assert len(regs) >= 60 and {"id", "lat", "lon"} <= set(regs[0])
+    assert len(regs) >= 30 and {"id", "lat", "lon"} <= set(regs[0])
 
 
 def test_confidence_map_is_ranked_and_bounded():

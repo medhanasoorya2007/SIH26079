@@ -36,6 +36,7 @@ class SignalContext:
     """Shared information passed to every signal."""
 
     fit_mask: pd.Series  # True for rows that may be used to fit climatologies (train years)
+    verification_lag_days: int = 2  # newest verified rain day at issue day I is I - lag
     cache: dict = field(default_factory=dict)
 
 
@@ -50,6 +51,10 @@ class Signal:
     explanations: ClassVar[dict[str, str]] = {}
     # features that should not be used for training (e.g. purely descriptive tags)
     exclude_from_model: ClassVar[tuple[str, ...]] = ()
+    # feature family (disagreement, spread, drift, pressure_wind, moisture, upstream, regime,
+    # context); ``families`` overrides it per output column
+    family: ClassVar[str] = "context"
+    families: ClassVar[dict[str, str]] = {}
 
     def available(self, df: pd.DataFrame) -> bool:
         return all(c in df.columns and df[c].notna().any() for c in self.requires)
@@ -96,6 +101,7 @@ def compute_signals(
         if bad:
             raise ValueError(f"signal {sig.name} produced non-sig_ columns: {bad}")
         out = out.drop(columns=[c for c in new.columns if c in out.columns]).join(new)
+        sig.outputs = list(new.columns)
         used.append(sig)
     return out, used
 
@@ -104,6 +110,34 @@ def feature_columns(df: pd.DataFrame, signals: list[Signal]) -> list[str]:
     """Model features = all sig_ columns except those signals flag as descriptive."""
     excluded = {c for s in signals for c in s.exclude_from_model}
     return [c for c in df.columns if c.startswith("sig_") and c not in excluded]
+
+
+FAMILIES = (
+    "disagreement",
+    "spread",
+    "drift",
+    "pressure_wind",
+    "moisture",
+    "upstream",
+    "regime",
+    "context",
+)
+
+
+def feature_families(df: pd.DataFrame, signals: list[Signal]) -> dict[str, str]:
+    """feature column -> family, for every model feature."""
+    out: dict[str, str] = {}
+    feats = set(feature_columns(df, signals))
+    for s in signals:
+        for c in getattr(s, "outputs", []):
+            if c in feats:
+                out[c] = s.families.get(c, s.family)
+    for c in feats:  # features added outside signals (e.g. analog features) default to context
+        out.setdefault(c, "context")
+    bad = {c: f for c, f in out.items() if f not in FAMILIES}
+    if bad:
+        raise ValueError(f"unknown families: {bad}")
+    return out
 
 
 def explanation_templates(signals: list[Signal]) -> dict[str, str]:

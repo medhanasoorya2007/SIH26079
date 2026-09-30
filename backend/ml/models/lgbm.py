@@ -1,11 +1,11 @@
 """Calibrated LightGBM bust classifier.
 
-* Class imbalance: ``class_weight='balanced'`` (busts are ~5% by construction).
-* Calibration: out-of-fold raw scores (leave-one-year-out over the training years) are
-  mapped to probabilities with isotonic regression, so the class weighting does not
-  inflate the probabilities shown to forecasters.
-* Explanations: the final booster's native TreeSHAP (``pred_contrib=True``), which
-  gives exactly the same values as ``shap.TreeExplainer`` without the numba dependency.
+* Fit on the TRAINING years only (class-weighted: busts are rare).
+* Calibrated with isotonic regression on the separate CALIBRATION block (v2 #10), so the
+  probabilities shown to forecasters are not inflated by the class weighting and the test
+  years are never touched.
+* Explanations: native TreeSHAP (``pred_contrib=True``) of the booster; identical to
+  ``shap.TreeExplainer`` values, without the numba dependency.
 """
 
 from __future__ import annotations
@@ -29,45 +29,28 @@ class BustModel:
     booster: lgb.LGBMClassifier | None = None
     calibrator: object | None = None
     feature_medians: dict = field(default_factory=dict)
-    oof_raw: np.ndarray | None = None
     label: str = "bust"
 
-    # ------------------------------------------------------------------ training
     def _new(self) -> lgb.LGBMClassifier:
         return lgb.LGBMClassifier(**self.params)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, groups: pd.Series) -> BustModel:
-        """Fit on training rows. ``groups`` (years) define the calibration folds."""
+    def fit(
+        self, X: pd.DataFrame, y: pd.Series, X_cal: pd.DataFrame, y_cal: pd.Series
+    ) -> BustModel:
+        """Booster on (X, y) = training years; calibrator on (X_cal, y_cal) = calibration block."""
         self.features = list(X.columns)
-        X = X.astype(float)
-        y = y.astype(int).to_numpy()
-        groups = np.asarray(groups)
-        oof = np.full(len(X), np.nan)
-        uniq = np.unique(groups)
-        if len(uniq) >= 2:
-            for g in uniq:
-                tr, va = groups != g, groups == g
-                if y[tr].sum() == 0:
-                    continue
-                m = self._new().fit(X[tr], y[tr])
-                oof[va] = m.predict_proba(X[va], raw_score=True)
-        else:  # single training year: calibrate on the last 25% of dates
-            cut = int(len(X) * 0.75)
-            m = self._new().fit(X.iloc[:cut], y[:cut])
-            oof[cut:] = m.predict_proba(X.iloc[cut:], raw_score=True)
-        ok = ~np.isnan(oof)
+        self.booster = self._new().fit(X.astype(float), y.astype(int).to_numpy())
+        raw = self.raw_score(X_cal)
+        yc = y_cal.astype(int).to_numpy()
         if self.calibration == "sigmoid":
-            self.calibrator = LogisticRegression().fit(oof[ok].reshape(-1, 1), y[ok])
+            self.calibrator = LogisticRegression().fit(raw.reshape(-1, 1), yc)
         else:
             self.calibrator = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(
-                oof[ok], y[ok]
+                raw, yc
             )
-        self.oof_raw = oof
-        self.booster = self._new().fit(X, y)
-        self.feature_medians = X.median(numeric_only=True).to_dict()
+        self.feature_medians = X.astype(float).median(numeric_only=True).to_dict()
         return self
 
-    # ---------------------------------------------------------------- inference
     def raw_score(self, X: pd.DataFrame) -> np.ndarray:
         return self.booster.predict_proba(X[self.features].astype(float), raw_score=True)
 
@@ -88,7 +71,6 @@ class BustModel:
         gain = self.booster.booster_.feature_importance(importance_type="gain")
         return pd.Series(gain, index=self.features).sort_values(ascending=False)
 
-    # ------------------------------------------------------------------ persistence
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self, path)
