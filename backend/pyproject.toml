@@ -1,0 +1,47 @@
+[project]
+name = "bustguard"
+version = "0.1.0"
+description = "BustGuard: AI-based forecast bust detection for medium-range weather forecasts (SIH26079, MoES/NCMRWF)"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8",
+  "pyyaml>=6.0",
+  "requests>=2.32",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "xarray>=2024.6",
+  "zarr>=2.18",
+  "gcsfs>=2024.6",
+  "netcdf4>=1.7",
+  "scikit-learn>=1.5",
+  "lightgbm>=4.5",
+  "imdlib>=0.1.20",
+  "joblib>=1.4",
+]
+
+[project.optional-dependencies]
+# numba/llvmlite-based extras. Installed in Docker/Linux. On Windows with Smart App
+# Control these DLLs can be blocked; BustGuard then falls back to LightGBM's native
+# TreeSHAP (identical values) and numpy/sklearn metrics.
+full = ["shap>=0.46", "xskillscore>=0.0.26"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3.8", "httpx>=0.27"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

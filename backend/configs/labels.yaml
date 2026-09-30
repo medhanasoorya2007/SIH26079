@@ -1,0 +1,31 @@
+# Bust definitions. `default` is what train/eval/API use; the others are reported alongside.
+#
+# `p95_error` follows the SIH26079 reference approach: a forecast is a bust when its
+# absolute error exceeds the lead-day-specific 95th percentile of historical errors
+# (thresholds are fitted on the TRAINING years only, then frozen).
+# `category_flip` is the decision-oriented definition: the forecast puts the day in a
+# different IMD warning class than what happened (missed heavy rain or false alarm).
+default: p95_error
+
+definitions:
+  p95_error:
+    kind: percentile_error
+    percentile: 95
+    group_by: [variable, lead_day]      # add region_id for region-specific thresholds
+    min_abs_error: {rain: 10.0, tmax: 2.0}   # ignore tiny errors in dry areas (mm, degC)
+
+  category_flip:
+    kind: category_flip
+    variable: rain
+    # IMD 24-h rainfall categories (mm): heavy >= 64.5, very heavy >= 115.6
+    thresholds: [64.5]
+    count: both            # misses and false alarms
+
+  tmax_error:
+    kind: absolute_error
+    variable: tmax
+    threshold: 3.0         # degC; decision-relevant for heat-wave warnings
+
+  decision:
+    kind: any_of
+    of: [category_flip, tmax_error]
