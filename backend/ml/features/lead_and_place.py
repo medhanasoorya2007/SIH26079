@@ -17,15 +17,16 @@ class LeadAndPlace(Signal):
     )
     requires = ("lead_day", "lat", "lon", "valid_date")
     order = 10
+    family = "context"
     explanations = {
         "sig_lead_day": {
-            "high": "Day-{value:.0f} lead time: rainfall errors grow quickly beyond Day 4 in the monsoon.",
-            "low": "Short lead time (Day {value:.0f}), yet other factors still raise the risk.",
+            "high": "Day-{value:.0f} lead time: longer leads are associated with larger rainfall errors.",
+            "low": "Short lead (Day {value:.0f}), but other factors are associated with elevated risk.",
         },
-        "sig_lat": "{region} sits in a latitude band where this model has historically erred more.",
-        "sig_lon": "{region} sits in a longitude band (coast / orography) with historically larger errors.",
-        "sig_doy_sin": "Time of season: this part of the monsoon season is historically harder to forecast.",
-        "sig_doy_cos": "Time of season: this part of the monsoon season is historically harder to forecast.",
+        "sig_lat": "{region}'s location has historically been associated with larger errors at this lead.",
+        "sig_lon": "{region}'s location has historically been associated with larger errors at this lead.",
+        "sig_doy_sin": "This stage of the monsoon season has historically been associated with more busts.",
+        "sig_doy_cos": "This stage of the monsoon season has historically been associated with more busts.",
     }
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:

@@ -1,4 +1,8 @@
-"""Spatial structure of the forecast around the region (sharp gradients = position risk)."""
+"""Spatial structure of the forecast inside the subdivision (family: context).
+
+Sharp contrasts within a subdivision mean a small displacement of the rain band changes the
+area-mean outcome.
+"""
 
 from __future__ import annotations
 
@@ -11,25 +15,22 @@ from ml.features.base import Signal, SignalContext, register
 class Neighbourhood(Signal):
     name = "neighbourhood"
     description = (
-        "Mean, spread and maximum of forecast rain in the surrounding grid cells. A rain band "
-        "or system edge next to the region means a small displacement gives a big point error."
+        "Spatial standard deviation and peak of forecast rain across the subdivision. Strong "
+        "internal gradients are associated with placement errors."
     )
-    requires = ("ctx_fc_neigh_mean", "ctx_fc_neigh_std", "ctx_fc_neigh_max")
+    requires = ("ctx_fc_sub_std", "ctx_fc_sub_max")
     order = 25
+    family = "context"
     explanations = {
-        "sig_fc_neigh_std": "Sharp rainfall gradient around {region} (spread {value:.0f} {unit}): a small shift of the rain band changes the outcome.",
-        "sig_fc_neigh_excess": "Much heavier rain is forecast just nearby ({value:.0f} {unit} more than at {region}).",
-        "sig_fc_neigh_mean": "Widespread forecast rain in the surrounding area ({value:.0f} {unit} on average).",
+        "sig_fc_sub_std": "Sharp rainfall contrasts forecast within {region} (spatial spread {value:.0f} {unit}), associated with placement errors.",
+        "sig_fc_sub_excess": "Local peaks {value:.0f} {unit} above the area mean are forecast within {region}.",
     }
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:
         return pd.DataFrame(
             {
-                "sig_fc_neigh_mean": df["ctx_fc_neigh_mean"].astype(float),
-                "sig_fc_neigh_std": df["ctx_fc_neigh_std"].astype(float),
-                "sig_fc_neigh_excess": (df["ctx_fc_neigh_max"] - df["fc"])
-                .clip(lower=0)
-                .astype(float),
+                "sig_fc_sub_std": df["ctx_fc_sub_std"].astype(float),
+                "sig_fc_sub_excess": (df["ctx_fc_sub_max"] - df["fc"]).clip(lower=0).astype(float),
             },
             index=df.index,
         )

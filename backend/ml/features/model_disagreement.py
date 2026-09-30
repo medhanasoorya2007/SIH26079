@@ -19,11 +19,16 @@ class ModelDisagreement(Signal):
     )
     requires = ("fc", "fc_alt")
     order = 30
+    family = "disagreement"
     explanations = {
-        "sig_disagreement_abs": "ECMWF and GraphCast disagree by {value:.0f} {unit} here: large model disagreement often precedes a bust.",
+        "sig_disagreement_abs": "The two models disagree by {value:.0f} {unit}; large disagreement is associated with busts.",
         "sig_disagreement_rel": "The two models disagree strongly in relative terms ({value:.0%} of the combined forecast).",
-        "sig_disagreement_cat": "The models put the day in different IMD rainfall categories ({value:.0f} class apart).",
+        "sig_disagreement_cat": "The two models put the day in different IMD warning classes ({value:.0f} class apart).",
     }
+
+    def available(self, df: pd.DataFrame) -> bool:
+        # needs a second model on most rows (GraphCast disagreement is out of v2 scope)
+        return "fc_alt" in df and df["fc_alt"].notna().mean() > 0.5
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:
         fc, alt = df["fc"].astype(float), df["fc_alt"].astype(float)

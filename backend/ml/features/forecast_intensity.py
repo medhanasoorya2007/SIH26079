@@ -11,10 +11,10 @@ HEAVY_RAIN_MM = 64.5  # IMD 'heavy rainfall' 24-h threshold
 
 
 def imd_rain_category(mm: np.ndarray | pd.Series) -> np.ndarray:
-    """IMD 24-h rainfall class: 0 none/very light, 1 light, 2 moderate, 3 heavy,
-    4 very heavy, 5 extremely heavy."""
-    bins = [2.5, 15.6, 64.5, 115.6, 204.5]
-    return np.digitize(np.asarray(mm, dtype=float), bins)
+    """IMD warning class used for busts: 0 light/moderate, 1 heavy, 2 very heavy, 3 extremely heavy."""
+    from ml.labels.bust import imd_category
+
+    return imd_category(mm)
 
 
 @register
@@ -26,16 +26,17 @@ class ForecastIntensity(Signal):
     )
     requires = ("fc", "region_id", "valid_date", "variable")
     order = 20
+    family = "context"
     explanations = {
         "sig_fc": {
-            "high": "Forecast is intense ({value:.0f} {unit}): big forecasts carry the largest absolute errors.",
-            "low": "Forecast is low ({value:.0f} {unit}) where rain often occurs: a missed event is possible.",
+            "high": "Forecast rainfall of {value:.0f} {unit} over {region}: intense forecasts are associated with the largest errors.",
+            "low": "Forecast rainfall is modest ({value:.0f} {unit}) in a setting associated with missed heavy rain.",
         },
         "sig_fc_clim_ratio": {
-            "high": "Forecast is {value:.1f}x the normal for this region and month: unusual events verify poorly.",
-            "low": "Forecast is well below normal ({value:.1f}x) for this region and month.",
+            "high": "Forecast is {value:.1f}x the normal for {region} this month; unusual amounts are associated with poor verification.",
+            "low": "Forecast is well below normal ({value:.1f}x) for {region} this month.",
         },
-        "sig_fc_category": "Forecast falls in IMD category {value:.0f} (3 = heavy, 4 = very heavy).",
+        "sig_fc_category": "Forecast sits in IMD warning class {value:.0f} (1 = heavy, 2 = very heavy).",
     }
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:
@@ -47,7 +48,7 @@ class ForecastIntensity(Signal):
         )["obs"].mean()
         idx = pd.MultiIndex.from_arrays(key)
         c = clim.reindex(idx).to_numpy()
-        ratio = (df["fc"].to_numpy() + 1.0) / (np.nan_to_num(c, nan=np.nan) + 1.0)
+        ratio = (df["fc"].to_numpy() + 1.0) / (c + 1.0)
         is_rain = (df["variable"] == "rain").to_numpy()
         return pd.DataFrame(
             {

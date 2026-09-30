@@ -37,13 +37,14 @@ class Regime(Signal):
     requires = ("fc", "valid_date")
     order = 60
     exclude_from_model = ("sig_regime_label",)
+    family = "regime"
     explanations = {
-        "sig_regime_depression": "Monsoon-depression regime: depression tracks and rain shields are often misplaced at this range.",
-        "sig_regime_cyclone": "A cyclone / deep low is in the forecast: track and landfall errors dominate.",
+        "sig_regime_depression": "Monsoon-depression regime: depression tracks and rain shields are associated with large placement errors at this range.",
+        "sig_regime_cyclone": "A cyclone / deep low is in the forecast; track and landfall errors are associated with busts.",
         "sig_regime_heavy_rain": "Heavy-rainfall regime: extreme amounts are rarely forecast at the right place and time.",
-        "sig_regime_active": "Active-monsoon spell: vigorous convection increases rainfall errors.",
-        "sig_regime_break": "Break-monsoon spell: the revival timing is notoriously hard to forecast.",
-        "sig_regime_wd": "Western-disturbance pattern over NW India: interaction with the monsoon trough is uncertain.",
+        "sig_regime_active": "Active-monsoon spell: vigorous convection is associated with larger rainfall errors.",
+        "sig_regime_break": "Break-monsoon spell: the timing of the revival is associated with forecast busts.",
+        "sig_regime_wd": "Western-disturbance pattern over NW India: its interaction with the monsoon trough is uncertain.",
         "sig_regime_heatwave": "Heat-wave regime: Tmax near record values, where models under- or over-shoot.",
     }
 

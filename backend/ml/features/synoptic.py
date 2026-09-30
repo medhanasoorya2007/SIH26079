@@ -1,8 +1,8 @@
-"""Synoptic state from the forecast pressure field: lows, depressions, low-level vorticity.
+"""Pressure & wind at the region, from the forecast MSLP field (family: pressure_wind).
 
-850 hPa winds are deliberately not downloaded (WeatherBench 2 stores every pressure level
-in one chunk, ~20x the cost of MSLP). Low-level circulation is instead diagnosed as
-*geostrophic vorticity* from the Laplacian of MSLP: zeta_g = lap(p) / (rho * f).
+850 hPa winds are not downloaded (every WeatherBench 2 pressure-level chunk holds all
+levels, ~20x the cost of MSLP). Low-level circulation is diagnosed from MSLP instead:
+geostrophic vorticity zeta_g = lap(p)/(rho f) and geostrophic wind (u_g, v_g).
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ import pandas as pd
 from ml.features.base import Signal, SignalContext, register
 
 
-def _anomaly(df: pd.DataFrame, col: str, ctx: SignalContext, by: list[str]) -> pd.Series:
-    """Value minus its training-period mean for the same group (region/month/...)."""
+def anomaly(df: pd.DataFrame, col: str, ctx: SignalContext, by: list[str]) -> pd.Series:
+    """Value minus its training-period mean for the same group and calendar month."""
     month = pd.to_datetime(df["valid_date"]).dt.month.rename("_month")
     keys = [df[c] for c in by] + [month]
     fit = ctx.fit_mask & df[col].notna()
@@ -27,35 +27,38 @@ def _anomaly(df: pd.DataFrame, col: str, ctx: SignalContext, by: list[str]) -> p
 class Synoptic(Signal):
     name = "synoptic"
     description = (
-        "Forecast MSLP anomaly at the region, geostrophic vorticity (cyclonic circulation), and "
-        "depth of the lowest pressure over the Bay of Bengal / Arabian Sea / NW India. Deep lows "
-        "and depressions are where medium-range track and intensity errors concentrate."
+        "Forecast MSLP anomaly, geostrophic vorticity and geostrophic wind over the region. "
+        "Deep lows, strong cyclonic circulation and wind shifts are associated with position "
+        "and intensity errors."
     )
     requires = ("ctx_mslp",)
     order = 40
+    family = "pressure_wind"
     explanations = {
         "sig_mslp_anom": {
-            "low": "Forecast pressure is {value:.1f} hPa below normal at {region}: a low-pressure system is nearby.",
-            "high": "Forecast pressure is {value:+.1f} hPa above normal: a suppressed / break-like pattern.",
+            "low": "Forecast pressure {value:.1f} hPa below normal over {region}: a low nearby is associated with uncertain rainfall placement.",
+            "high": "Forecast pressure {value:+.1f} hPa above normal over {region} (suppressed / break-like flow).",
         },
         "sig_geo_vorticity": {
-            "high": "Strong cyclonic circulation forecast near {region} ({value:.1f}e-5 s^-1): system position/intensity is uncertain.",
-            "low": "Anticyclonic flow forecast near {region}.",
+            "high": "Cyclonic circulation forecast over {region} ({value:.1f}e-5 per s), associated with system position errors.",
+            "low": "Anticyclonic flow forecast over {region}.",
         },
-        "sig_bob_low_anom": "A deep low / depression is forecast over the Bay of Bengal ({value:.1f} hPa below normal): depression tracks are often mis-forecast.",
-        "sig_arb_low_anom": "A low is forecast over the Arabian Sea ({value:.1f} hPa below normal): offshore trough / vortex uncertainty.",
-        "sig_nw_mslp_anom": "Pressure anomaly over NW India of {value:.1f} hPa: heat-low / western-disturbance interaction.",
+        "sig_geo_wind": "Strong pressure gradient over {region} (geostrophic wind {value:.0f} m/s).",
+        "sig_geo_u": {
+            "high": "Strong westerly monsoon flow forecast over {region} ({value:.0f} m/s).",
+            "low": "Weak or easterly low-level flow forecast over {region} ({value:.0f} m/s): a wind shift.",
+        },
     }
 
     def compute(self, df: pd.DataFrame, ctx: SignalContext) -> pd.DataFrame:
-        out = {"sig_mslp_anom": _anomaly(df, "ctx_mslp", ctx, ["region_id"])}
-        out["sig_geo_vorticity"] = (
-            df["ctx_geo_vort"].astype(float) if "ctx_geo_vort" in df else np.nan
+        f = lambda c: df[c].astype(float) if c in df else pd.Series(np.nan, index=df.index)  # noqa: E731
+        u, v = f("ctx_geo_u"), f("ctx_geo_v")
+        return pd.DataFrame(
+            {
+                "sig_mslp_anom": anomaly(df, "ctx_mslp", ctx, ["region_id"]),
+                "sig_geo_vorticity": f("ctx_geo_vort"),
+                "sig_geo_wind": np.hypot(u, v),
+                "sig_geo_u": u,
+            },
+            index=df.index,
         )
-        for col, name in [
-            ("ctx_bob_min_mslp", "sig_bob_low_anom"),
-            ("ctx_arb_min_mslp", "sig_arb_low_anom"),
-            ("ctx_nw_mslp", "sig_nw_mslp_anom"),
-        ]:
-            out[name] = _anomaly(df, col, ctx, ["lead_day"]) if col in df else np.nan
-        return pd.DataFrame(out, index=df.index)
