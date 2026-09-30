@@ -1,0 +1,127 @@
+# IMD meteorological subdivisions = BustGuard's verification regions (v2).
+#
+# Geometry is derived, not hand-drawn: every IMD 0.25 deg land cell is assigned to a state
+# (Natural Earth 50m admin-1, data/raw/shapes) and then to a subdivision. Where IMD splits a
+# state into several subdivisions, the cell goes to the subdivision of the nearest anchor
+# (approximate city locations). The map outline is therefore IMD's own gridded-data domain.
+# This is an approximation of the official IMD subdivision boundaries; if an official
+# boundary file is placed at data/raw/shapes/imd_subdivisions.geojson (property `name`
+# matching the names below) it is used instead.
+state_file: ne_50m_admin_1.geojson
+official_file: imd_subdivisions.geojson
+# IMD grid cells north of 32N / west of 81E that fall outside the 50m state polygons belong to
+# Jammu & Kashmir and Ladakh (India's official extent, as covered by the IMD grid).
+northern_fallback: {id: jk_ladakh, min_lat: 32.0, max_lon: 81.0}
+
+subdivisions:
+  - {id: arunachal_pradesh, name: Arunachal Pradesh, zone: NE, states: [Arunachal Pradesh]}
+  - {id: assam_meghalaya, name: Assam & Meghalaya, zone: NE, states: [Assam, Meghalaya]}
+  - {id: nmmt, name: "Nagaland, Manipur, Mizoram & Tripura", zone: NE, states: [Nagaland, Manipur, Mizoram, Tripura]}
+  - id: shwb_sikkim
+    name: Sub-Himalayan West Bengal & Sikkim
+    zone: NE
+    states: [Sikkim, West Bengal]
+    anchors: [[26.52, 88.72], [27.04, 88.26], [26.32, 89.45], [26.49, 89.53]]
+  - id: gangetic_wb
+    name: Gangetic West Bengal
+    zone: East
+    states: [West Bengal]
+    anchors: [[22.57, 88.36], [23.23, 87.07], [22.42, 87.32], [25.00, 88.14], [24.10, 88.25], [23.24, 87.86]]
+  - {id: odisha, name: Odisha, zone: East, states: [Odisha]}
+  - {id: jharkhand, name: Jharkhand, zone: East, states: [Jharkhand]}
+  - {id: bihar, name: Bihar, zone: East, states: [Bihar]}
+  - id: east_up
+    name: East Uttar Pradesh
+    zone: NW
+    states: [Uttar Pradesh]
+    anchors: [[25.32, 82.97], [26.76, 83.37], [26.85, 80.95], [25.44, 81.85], [26.80, 82.20], [27.57, 81.60]]
+  - id: west_up
+    name: West Uttar Pradesh
+    zone: NW
+    states: [Uttar Pradesh]
+    anchors: [[28.98, 77.71], [27.18, 78.01], [28.37, 79.43], [25.45, 78.57], [27.49, 77.67], [29.47, 77.70]]
+  - {id: uttarakhand, name: Uttarakhand, zone: NW, states: [Uttarakhand]}
+  - {id: haryana_delhi, name: "Haryana, Chandigarh & Delhi", zone: NW, states: [Haryana, Chandigarh, Delhi]}
+  - {id: punjab, name: Punjab, zone: NW, states: [Punjab]}
+  - {id: himachal_pradesh, name: Himachal Pradesh, zone: NW, states: [Himachal Pradesh]}
+  - {id: jk_ladakh, name: Jammu & Kashmir and Ladakh, zone: NW, states: [Jammu and Kashmir, Ladakh]}
+  - id: west_rajasthan
+    name: West Rajasthan
+    zone: NW
+    states: [Rajasthan]
+    anchors: [[26.24, 73.02], [28.02, 73.31], [25.75, 71.39], [26.91, 70.92], [29.90, 73.88], [25.35, 72.62]]
+  - id: east_rajasthan
+    name: East Rajasthan
+    zone: NW
+    states: [Rajasthan]
+    anchors: [[26.91, 75.79], [25.21, 75.86], [24.58, 73.71], [26.45, 74.64], [27.55, 76.60], [24.88, 74.63]]
+  - id: west_mp
+    name: West Madhya Pradesh
+    zone: Central
+    states: [Madhya Pradesh]
+    anchors: [[23.26, 77.41], [22.72, 75.86], [26.22, 78.18], [23.18, 75.78], [22.75, 77.72], [24.60, 76.80]]
+  - id: east_mp
+    name: East Madhya Pradesh
+    zone: Central
+    states: [Madhya Pradesh]
+    anchors: [[23.18, 79.99], [24.53, 81.30], [23.84, 78.74], [23.30, 81.36], [22.06, 78.94]]
+  - id: gujarat_region
+    name: Gujarat Region
+    zone: Central
+    states: [Gujarat, Dadra and Nagar Haveli and Daman and Diu]
+    anchors: [[23.02, 72.57], [21.17, 72.83], [22.31, 73.18], [24.17, 72.43], [20.61, 72.93]]
+  - id: saurashtra_kutch
+    name: Saurashtra & Kutch
+    zone: Central
+    states: [Gujarat]
+    anchors: [[22.30, 70.80], [23.24, 69.67], [22.47, 70.06], [21.76, 72.15], [21.52, 70.46]]
+  - id: konkan_goa
+    name: Konkan & Goa
+    zone: Central
+    states: [Maharashtra, Goa]
+    anchors: [[19.08, 72.88], [16.99, 73.31], [15.49, 73.83], [19.20, 72.97], [16.00, 73.50], [18.50, 73.10]]
+  - id: madhya_maharashtra
+    name: Madhya Maharashtra
+    zone: Central
+    states: [Maharashtra]
+    anchors: [[18.52, 73.86], [20.00, 73.79], [16.70, 74.24], [17.66, 75.91], [21.00, 75.56], [19.09, 74.74]]
+  - id: marathwada
+    name: Marathwada
+    zone: Central
+    states: [Maharashtra]
+    anchors: [[19.88, 75.34], [18.40, 76.56], [19.15, 77.30], [18.99, 75.76]]
+  - id: vidarbha
+    name: Vidarbha
+    zone: Central
+    states: [Maharashtra]
+    anchors: [[21.15, 79.09], [20.70, 77.00], [20.93, 77.75], [19.96, 79.30], [20.39, 78.12]]
+  - {id: chhattisgarh, name: Chhattisgarh, zone: Central, states: [Chhattisgarh]}
+  - id: coastal_ap
+    name: Coastal Andhra Pradesh & Yanam
+    zone: South
+    states: [Andhra Pradesh]
+    anchors: [[17.69, 83.22], [16.19, 81.14], [14.44, 79.99], [16.51, 80.65], [18.30, 83.90], [15.50, 80.05]]
+  - id: rayalaseema
+    name: Rayalaseema
+    zone: South
+    states: [Andhra Pradesh]
+    anchors: [[14.68, 77.60], [15.83, 78.04], [14.47, 78.82], [13.63, 79.42]]
+  - {id: telangana, name: Telangana, zone: South, states: [Telangana]}
+  - {id: tamil_nadu, name: "Tamil Nadu, Puducherry & Karaikal", zone: South, states: [Tamil Nadu, Puducherry]}
+  - id: coastal_karnataka
+    name: Coastal Karnataka
+    zone: South
+    states: [Karnataka]
+    anchors: [[12.91, 74.86], [14.81, 74.13], [13.34, 74.75]]
+  - id: nik
+    name: North Interior Karnataka
+    zone: South
+    states: [Karnataka]
+    anchors: [[15.85, 74.50], [17.33, 76.83], [16.83, 75.71], [15.14, 76.92], [15.46, 75.00]]
+  - id: sik
+    name: South Interior Karnataka
+    zone: South
+    states: [Karnataka]
+    anchors: [[12.97, 77.59], [12.30, 76.64], [13.93, 75.57], [14.23, 76.40], [13.00, 76.10]]
+  - {id: kerala_mahe, name: Kerala & Mahe, zone: South, states: [Kerala]}
+  - {id: andaman_nicobar, name: Andaman & Nicobar Islands, zone: South, states: [Andaman and Nicobar]}

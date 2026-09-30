@@ -20,6 +20,7 @@ dependencies = [
   "lightgbm>=4.5",
   "imdlib>=0.1.20",
   "joblib>=1.4",
+  "shapely>=2.0",
 ]
 
 [project.optional-dependencies]
