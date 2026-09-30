@@ -31,6 +31,25 @@ def fit_masks(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     return (df["split"] == "train") & free, (df["split"] == "calib") & free
 
 
+def select_model(
+    cfg: dict, X: pd.DataFrame, feats: list[str], y: pd.Series, ytr: pd.Series, ycal: pd.Series
+) -> tuple[BustModel, list[dict]]:
+    """Fit each grid candidate on training years; keep the best calibration-block PR-AUC."""
+    from sklearn.metrics import average_precision_score
+
+    best, log = None, []
+    for i, over in enumerate(cfg.get("lightgbm_grid") or [{}]):
+        params = {**cfg["lightgbm"], **over}
+        m = BustModel(params=params, calibration=cfg["calibration"]["method"])
+        m.fit(X.loc[ytr, feats], y[ytr], X.loc[ycal, feats], y[ycal])
+        score = float(average_precision_score(y[ycal], m.raw_score(X.loc[ycal, feats])))
+        log.append({"candidate": i, "overrides": over, "calibration_pr_auc": score})
+        print(f"        grid {i}: {over} -> calibration PR-AUC {score:.4f}", flush=True)
+        if best is None or score > best[0]:
+            best = (score, m)
+    return best[1], log
+
+
 def train(source: str, labels: list[str] | None = None) -> dict:
     cfg = load_config("model")
     adir = artifact_dir(source)
@@ -77,10 +96,8 @@ def train(source: str, labels: list[str] | None = None) -> dict:
                 f"[train] skip {label}: only {int(df.loc[ytr, ycol].sum())} positives in training years"
             )
             continue
-        model = BustModel(
-            params=dict(cfg["lightgbm"]), calibration=cfg["calibration"]["method"], label=label
-        )
-        model.fit(X.loc[ytr, feats], df.loc[ytr, ycol], X.loc[ycal, feats], df.loc[ycal, ycol])
+        model, grid_log = select_model(cfg, X, feats, df[ycol], ytr, ycal)
+        model.label = label
         preds[f"prob_{label}"] = model.predict_proba(X[feats])
         model.save(adir / f"model_{label}.joblib")
         af.to_parquet(adir / f"analog_features_{label}.parquet")
@@ -91,13 +108,7 @@ def train(source: str, labels: list[str] | None = None) -> dict:
             preds[f"{key}_prob_{label}"] = bl.predict_proba(df)
         joblib.dump(baselines, adir / f"baselines_{label}.joblib")
 
-        from sklearn.metrics import average_precision_score
-
-        cal_pr = (
-            average_precision_score(df.loc[ycal, ycol], preds.loc[ycal, f"prob_{label}"])
-            if df.loc[ycal, ycol].nunique() == 2
-            else float("nan")
-        )
+        cal_pr = max(g["calibration_pr_auc"] for g in grid_log)
         summary[label] = {
             "n_train_busts": int(df.loc[ytr, ycol].sum()),
             "n_calib_busts": int(df.loc[ycal, ycol].sum()),
@@ -105,6 +116,8 @@ def train(source: str, labels: list[str] | None = None) -> dict:
             "features": feats,
             "top_features": model.importance().head(12).round(1).to_dict(),
             "baselines": {k: b.name for k, b in baselines.items()},
+            "params": model.params,
+            "grid": grid_log,
         }
         print(
             f"[train] {label}: {int(ytr.sum()):,} train rows ({summary[label]['n_train_busts']} busts), calibration PR-AUC {cal_pr:.3f}"
