@@ -37,8 +37,8 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
         leads={leadOrder}
         summary={dots}
       />
-      <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
-        <span>Issued</span>
+      <div className="grid grid-cols-[6rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
+        <span>Lead · issued</span>
         <span>Ensemble spread says</span>
         <span>{BRAND} says</span>
       </div>
@@ -51,11 +51,11 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
               initial={{ opacity: 0, y: reduce ? 0 : 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduce ? 0 : 0.3 }}
-              className={cn("grid grid-cols-[4.5rem_1fr_1fr] items-center gap-3 rounded-panel p-2", warnStart && "shadow-neu-inset-sm ring-2 ring-accent")}
+              className={cn("grid grid-cols-[6rem_1fr_1fr] items-center gap-3 rounded-panel p-2", warnStart && "shadow-neu-inset-sm ring-2 ring-accent")}
             >
               <span className="text-xs font-semibold tabular text-fg">
                 Day {s.lead_day}
-                <span className="block font-normal text-muted">{fmtDate(s.init_date, { day: "numeric", month: "short" })}</span>
+                <span className="block font-normal text-muted">issued {fmtDate(s.init_date, { day: "numeric", month: "short" })}</span>
               </span>
               <NeuWell shallow className="p-3 text-xs">
                 <div className={cn("font-semibold", s.spread_flag ? "text-risk-medium-text" : "text-fg")}>
