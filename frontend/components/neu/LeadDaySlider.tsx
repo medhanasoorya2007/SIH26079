@@ -53,8 +53,8 @@ export function LeadDaySlider({
         role="slider"
         tabIndex={0}
         aria-label={label}
-        aria-valuemin={leads[0]}
-        aria-valuemax={leads[leads.length - 1]}
+        aria-valuemin={Math.min(...leads)}
+        aria-valuemax={Math.max(...leads)}
         aria-valuenow={value}
         aria-valuetext={`Day ${value}${cur ? `, highest risk ${RISK_LABEL[cur.max_risk].toLowerCase()}, ${cur.n_high} high-risk regions` : ""}`}
         onKeyDown={onKey}

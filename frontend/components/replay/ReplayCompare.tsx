@@ -12,19 +12,31 @@ import { BRAND } from "@/lib/brand";
  * Day 10 towards the event. The day Predicta's continuous warning began is highlighted. */
 export function ReplayCompare({ region, validDate, step, setStep }: { region: ReplayRegion; validDate: string; step: number; setStep: (n: number) => void }) {
   const reduce = useReducedMotion();
-  const steps = region.steps; // Day 10 -> Day 1
-  const order = steps.map((_, i) => i + 1); // scrub positions 1..N
+  const steps = region.steps; // Day 10 -> Day 1 (issued earliest -> latest)
   const shown = steps.slice(0, step);
   const firstWarn = region.first_warning.BustGuard;
   const firstSpread = region.first_warning.spread;
   const done = step >= steps.length;
+  // The slider shows real lead days, left (Day 10) to right (Day 1); `step` is how many
+  // issue days have been revealed so far.
+  const leadOrder = steps.map((s) => s.lead_day);
+  const currentLead = steps[Math.max(0, step - 1)]?.lead_day ?? leadOrder[0];
+  const dots = steps.map((s) => ({
+    lead_day: s.lead_day,
+    max_risk: s.model_risk,
+    n_high: s.model_risk === "High" ? 1 : 0,
+    n_medium: s.model_risk === "Medium" ? 1 : 0,
+    n_cw: s.confidently_wrong ? 1 : 0,
+    max_prob: s.model_prob ?? 0,
+  }));
   return (
     <div className="space-y-6">
       <LeadDaySlider
-        label={`Scrub towards ${fmtDate(validDate)} (Day ${steps[0]?.lead_day} → Day 1)`}
-        value={step}
-        onChange={setStep}
-        leads={order}
+        label={`Scrub towards ${fmtDate(validDate)} (Day ${leadOrder[0]} → Day ${leadOrder[leadOrder.length - 1]}); dots = ${BRAND} risk`}
+        value={currentLead}
+        onChange={(lead) => setStep(leadOrder.indexOf(lead) + 1)}
+        leads={leadOrder}
+        summary={dots}
       />
       <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
         <span>Issued</span>
