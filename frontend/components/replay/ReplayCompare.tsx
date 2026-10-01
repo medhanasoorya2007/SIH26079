@@ -32,10 +32,10 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
   return (
     <div className="space-y-6">
       <LeadDaySlider
-        label={`Scrub towards ${fmtDate(validDate)} (Day ${leadOrder[0]} → Day ${leadOrder[leadOrder.length - 1]}); dots = ${BRAND} risk`}
+        label={`Lead day of the forecast for ${fmtDate(validDate)}; dots = ${BRAND} risk`}
         value={currentLead}
         onChange={(lead) => setStep(leadOrder.indexOf(lead) + 1)}
-        leads={leadOrder}
+        leads={[...leadOrder].sort((a, b) => a - b)}
         summary={dots}
       />
       <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
