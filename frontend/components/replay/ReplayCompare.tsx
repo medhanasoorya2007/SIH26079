@@ -12,16 +12,14 @@ import { BRAND } from "@/lib/brand";
  * Day 10 towards the event. The day Predicta's continuous warning began is highlighted. */
 export function ReplayCompare({ region, validDate, step, setStep }: { region: ReplayRegion; validDate: string; step: number; setStep: (n: number) => void }) {
   const reduce = useReducedMotion();
-  const steps = region.steps; // Day 10 -> Day 1 (issued earliest -> latest)
-  // forecasts revealed so far, listed Day 1 -> Day 10 (same order as the slider)
-  const shown = steps.slice(0, step).sort((a, b) => a.lead_day - b.lead_day);
+  const steps = region.steps;
+  const leadOrder = steps.map((s) => s.lead_day).sort((a, b) => a - b); // Day 1 -> Day 10
+  // `step` = the lead day selected on the slider; show forecasts Day 1 .. that day
+  const currentLead = leadOrder.includes(step) ? step : leadOrder[0];
+  const shown = steps.filter((s) => s.lead_day <= currentLead).sort((a, b) => a.lead_day - b.lead_day);
   const firstWarn = region.first_warning.BustGuard;
   const firstSpread = region.first_warning.spread;
-  const done = step >= steps.length;
-  // The slider shows real lead days, left (Day 10) to right (Day 1); `step` is how many
-  // issue days have been revealed so far.
-  const leadOrder = steps.map((s) => s.lead_day);
-  const currentLead = steps[Math.max(0, step - 1)]?.lead_day ?? leadOrder[0];
+  const done = true; // Day 1 (the last forecast before the event) is always in view
   const dots = steps.map((s) => ({
     lead_day: s.lead_day,
     max_risk: s.model_risk,
@@ -33,10 +31,10 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
   return (
     <div className="space-y-6">
       <LeadDaySlider
-        label={`Lead day of the forecast for ${fmtDate(validDate)}; dots = ${BRAND} risk`}
+        label={`Forecasts for ${fmtDate(validDate)} from Day 1 up to the selected day; dots = ${BRAND} risk`}
         value={currentLead}
-        onChange={(lead) => setStep(leadOrder.indexOf(lead) + 1)}
-        leads={[...leadOrder].sort((a, b) => a - b)}
+        onChange={setStep}
+        leads={leadOrder}
         summary={dots}
       />
       <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
