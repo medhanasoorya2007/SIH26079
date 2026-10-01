@@ -13,7 +13,8 @@ import { BRAND } from "@/lib/brand";
 export function ReplayCompare({ region, validDate, step, setStep }: { region: ReplayRegion; validDate: string; step: number; setStep: (n: number) => void }) {
   const reduce = useReducedMotion();
   const steps = region.steps; // Day 10 -> Day 1 (issued earliest -> latest)
-  const shown = steps.slice(0, step);
+  // forecasts revealed so far, listed Day 1 -> Day 10 (same order as the slider)
+  const shown = steps.slice(0, step).sort((a, b) => a.lead_day - b.lead_day);
   const firstWarn = region.first_warning.BustGuard;
   const firstSpread = region.first_warning.spread;
   const done = step >= steps.length;
