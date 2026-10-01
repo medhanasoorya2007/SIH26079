@@ -38,7 +38,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const ql = Number(params.get("lead"));
         if (ql && m.lead_days.includes(ql)) setLead(ql);
       })
-      .catch((e: Error) => setError(`Cannot reach the BustGuard API (${e.message}). Start it with \`make api\`.`));
+      .catch((e: Error) => setError(`Cannot reach the Predicta API (${e.message}). Start it with \`make api\`.`));
   }, []);
 
   const value = useMemo(() => ({ meta, dates, date, setDate, variable, setVariable, lead, setLead, error }), [meta, dates, date, variable, lead, error]);

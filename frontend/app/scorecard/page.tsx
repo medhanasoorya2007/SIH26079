@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { num } from "@/lib/format";
 import { HEX } from "@/lib/risk";
 import { useApi } from "@/lib/useApi";
+import { BRAND, displayName } from "@/lib/brand";
 
 type Mode = "gain" | "model";
 
@@ -46,14 +47,14 @@ export default function ScorecardPage() {
           onChange={setMode}
           options={[
             { value: "gain", label: "Gain over best baseline" },
-            { value: "model", label: "BustGuard PR-AUC" },
+            { value: "model", label: `${BRAND} PR-AUC` },
           ]}
         />
       </header>
       <NeuCard>
         <div className="overflow-x-auto rounded-panel p-3 shadow-neu-inset-deep">
           <table className="w-full border-separate border-spacing-1.5 text-xs">
-            <caption className="sr-only">{mode === "gain" ? "PR-AUC gain of BustGuard over the best spread baseline" : "BustGuard PR-AUC"} by regime and lead day</caption>
+            <caption className="sr-only">{mode === "gain" ? `PR-AUC gain of ${BRAND} over the best spread baseline` : `${BRAND} PR-AUC`} by regime and lead day</caption>
             <thead>
               <tr>
                 <th scope="col" className="px-2 py-1 text-left font-semibold text-muted">
@@ -78,7 +79,7 @@ export default function ScorecardPage() {
                     return (
                       <td
                         key={l}
-                        title={c ? `${c.n_busts} busts / ${c.n} forecasts${c.pr_auc ? ` · PR-AUC ${Object.entries(c.pr_auc).map(([k, x]) => `${k} ${x.toFixed(3)}`).join(", ")}` : ""}` : "no data"}
+                        title={c ? `${c.n_busts} busts / ${c.n} forecasts${c.pr_auc ? ` · PR-AUC ${Object.entries(c.pr_auc).map(([k, x]) => `${displayName(k)} ${x.toFixed(3)}`).join(", ")}` : ""}` : "no data"}
                         className="h-11 min-w-[3.25rem] rounded-control text-center font-bold tabular"
                         style={v === null ? { boxShadow: "var(--shadow-inset-sm)", color: "var(--muted)" } : { background: colour(v, lo, hi), color: "#fff", opacity: 0.9 }}
                       >

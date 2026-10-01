@@ -19,7 +19,7 @@ export default function BlindspotsPage() {
         <div className="max-w-2xl">
           <h1 className="font-display text-3xl font-extrabold tracking-tight text-fg md:text-4xl">Blind spots</h1>
           <p className="mt-2 text-sm text-muted">
-            Forecasts the spread would trust (lowest third of lagged-ensemble spread for the regime and month) that BustGuard rates HIGH. Confidently-wrong alerts, where similar past cases also busted, are listed first.
+            Forecasts the spread would trust (lowest third of lagged-ensemble spread for the regime and month) that Predicta rates HIGH. Confidently-wrong alerts, where similar past cases also busted, are listed first.
           </p>
         </div>
         <NeuSegmented
@@ -75,7 +75,7 @@ export default function BlindspotsPage() {
                       <div className="font-semibold text-fg">{it.spread_says}</div>
                     </NeuWell>
                     <NeuWell shallow className="p-2.5">
-                      <div className="text-muted">BustGuard says</div>
+                      <div className="text-muted">Predicta says</div>
                       <div className="font-semibold text-fg">{it.risk.toUpperCase()} risk</div>
                     </NeuWell>
                   </div>

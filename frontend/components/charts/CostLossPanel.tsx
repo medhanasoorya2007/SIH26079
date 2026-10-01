@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { num } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 import { CostLossChart } from "./Charts";
+import { displayName } from "@/lib/brand";
 
 const USERS = [
   { value: "disaster_manager", label: "Disaster manager" },
@@ -40,7 +41,7 @@ export function CostLossPanel() {
             </NeuWell>
             {Object.entries(data.preset.value).map(([m, v]) => (
               <NeuWell key={m} shallow className="flex items-center justify-between py-3 text-sm">
-                <span className={m === "BustGuard" ? "font-bold text-accent-text" : "text-muted"}>{m}</span>
+                <span className={m === "BustGuard" ? "font-bold text-accent-text" : "text-muted"}>{displayName(m)}</span>
                 <span className="font-display text-lg font-extrabold tabular text-fg">{num(v)}</span>
               </NeuWell>
             ))}

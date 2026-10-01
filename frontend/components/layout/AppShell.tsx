@@ -9,6 +9,7 @@ import { NeuButton, NeuCard } from "@/components/neu";
 import { cn } from "@/lib/utils";
 import { useAppState } from "./AppState";
 import { DatePicker } from "./DatePicker";
+import { BRAND } from "@/lib/brand";
 
 const NAV = [
   { href: "/", label: "Console" },
@@ -34,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Gauge className="h-5 w-5 text-accent-text" aria-hidden />
             </span>
             <span className="leading-tight">
-              <span className="block font-display text-lg font-extrabold tracking-tight text-fg">BustGuard</span>
+              <span className="block font-display text-lg font-extrabold tracking-tight text-fg">{BRAND}</span>
               <span className="hidden text-[11px] font-medium text-muted sm:block">Forecast bust detection · SIH26079</span>
             </span>
           </Link>

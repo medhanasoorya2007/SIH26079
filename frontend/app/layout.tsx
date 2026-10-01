@@ -9,7 +9,7 @@ const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "
 const body = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "BustGuard: forecast bust detection",
+  title: "Predicta: forecast bust detection",
   description: "Where and when (Day 1-10) a medium-range rainfall forecast is likely to bust, how likely, and why. SIH26079 · MoES/NCMRWF.",
 };
 

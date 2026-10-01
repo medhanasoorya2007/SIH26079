@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { fmtDate, num, pct } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 import { cn } from "@/lib/utils";
+import { BRAND, displayName } from "@/lib/brand";
 
 export default function EvidencePage() {
   const { data: m, error } = useApi("metrics", api.metrics);
@@ -21,7 +22,7 @@ export default function EvidencePage() {
       <header className="max-w-3xl">
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-fg md:text-4xl">Evidence</h1>
         <p className="mt-2 text-sm text-muted">
-          BustGuard vs both spread baselines on the fully unseen test years {m.split.test_years.join(" & ")} ({m.test_period.n.toLocaleString("en-IN")} forecasts, {fmtDate(m.test_period.from)} to {fmtDate(m.test_period.to)}). Trained on{" "}
+          {BRAND} vs both spread baselines on the fully unseen test years {m.split.test_years.join(" & ")} ({m.test_period.n.toLocaleString("en-IN")} forecasts, {fmtDate(m.test_period.from)} to {fmtDate(m.test_period.to)}). Trained on{" "}
           {m.split.train_years.join(" & ")}, calibrated on {m.split.calibration_years.join(", ")}. Bust = IMD rainfall category missed (heavy observed, not forecast) or off by ≥ 2 classes. Usual bust rate {pct(m.headline.base_rate, 2)}.
         </p>
       </header>
@@ -33,7 +34,7 @@ export default function EvidencePage() {
           const model = name === "BustGuard";
           return (
             <NeuCard key={name} compact className={cn(model && "ring-2 ring-accent/40")}>
-              <div className={cn("text-sm font-bold", model ? "text-accent-text" : "text-muted")}>{name}</div>
+              <div className={cn("text-sm font-bold", model ? "text-accent-text" : "text-muted")}>{displayName(name)}</div>
               <NeuWell className="mt-4">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">PR-AUC (primary)</div>
                 <div className="font-display text-4xl font-extrabold tabular text-fg">{num(o.pr_auc, 3)}</div>
@@ -82,7 +83,7 @@ export default function EvidencePage() {
                 const r = (cw[name] as { recall_low_spread_busts: number | null })?.recall_low_spread_busts ?? 0;
                 return (
                   <li key={name} className="grid grid-cols-[12rem_1fr_3.5rem] items-center gap-3 text-sm">
-                    <span className={name === "BustGuard" ? "font-bold text-accent-text" : "text-muted"}>{name}</span>
+                    <span className={name === "BustGuard" ? "font-bold text-accent-text" : "text-muted"}>{displayName(name)}</span>
                     <span className="h-3.5 overflow-hidden rounded-full shadow-neu-inset-sm">
                       <span className={cn("block h-full rounded-full", name === "BustGuard" ? "bg-accent" : "bg-muted/60")} style={{ width: `${r * 100}%` }} />
                     </span>
@@ -120,7 +121,7 @@ export default function EvidencePage() {
               const e = ew[name] as { mean_days: number | null; share_warned: number | null; share_3plus_days: number | null };
               return (
                 <NeuWell key={name} shallow className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className={cn("col-span-3 text-left text-sm font-semibold", name === "BustGuard" ? "text-accent-text" : "text-muted")}>{name}</div>
+                  <div className={cn("col-span-3 text-left text-sm font-semibold", name === "BustGuard" ? "text-accent-text" : "text-muted")}>{displayName(name)}</div>
                   <div>
                     <div className="font-display text-xl font-extrabold tabular text-fg">{num(e.mean_days, 1)}</div>
                     <div className="text-muted">mean days of warning</div>

@@ -6,9 +6,10 @@ import { CwBadge, LeadDaySlider, NeuWell, RiskBadge } from "@/components/neu";
 import { fmtDate, mm, pct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ReplayRegion } from "@/types/api";
+import { BRAND } from "@/lib/brand";
 
-/** Two columns per issue day: what the spread said vs what BustGuard said, scrubbed from
- * Day 10 towards the event. The day BustGuard's continuous warning began is highlighted. */
+/** Two columns per issue day: what the spread said vs what Predicta said, scrubbed from
+ * Day 10 towards the event. The day Predicta's continuous warning began is highlighted. */
 export function ReplayCompare({ region, validDate, step, setStep }: { region: ReplayRegion; validDate: string; step: number; setStep: (n: number) => void }) {
   const reduce = useReducedMotion();
   const steps = region.steps; // Day 10 -> Day 1
@@ -28,7 +29,7 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
       <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
         <span>Issued</span>
         <span>Ensemble spread says</span>
-        <span>BustGuard says</span>
+        <span>{BRAND} says</span>
       </div>
       <ol className="space-y-3">
         {shown.map((s) => {
@@ -55,7 +56,7 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
                 <RiskBadge risk={s.model_risk} />
                 <span className="font-semibold tabular text-fg">{pct(s.model_prob, 1)}</span>
                 {s.confidently_wrong && <CwBadge compact />}
-                {warnStart && <span className="w-full font-bold text-accent-text">BustGuard warning begins</span>}
+                {warnStart && <span className="w-full font-bold text-accent-text">{BRAND} warning begins</span>}
               </NeuWell>
             </motion.li>
           );
@@ -70,7 +71,7 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
             </span>
           </div>
           <div className="text-xs text-muted">
-            BustGuard warning held continuously from {firstWarn ? `Day ${firstWarn}` : "— (no continuous warning)"}; spread from {firstSpread ? `Day ${firstSpread}` : "— (never)"}.
+            {BRAND} warning held continuously from {firstWarn ? `Day ${firstWarn}` : "— (no continuous warning)"}; spread from {firstSpread ? `Day ${firstSpread}` : "— (never)"}.
           </div>
         </NeuWell>
       ) : (

@@ -5,6 +5,7 @@ import { NeuWell } from "@/components/neu";
 import { HEX } from "@/lib/risk";
 import type { Metrics, ReliabilityBin } from "@/types/api";
 import { axis, grid, MODEL, seriesStyle, tooltipStyle } from "./chartStyle";
+import { displayName } from "@/lib/brand";
 
 export function ChartWell({ title, caption, children, height = 280 }: { title: string; caption?: string; children: React.ReactNode; height?: number }) {
   return (
@@ -39,7 +40,7 @@ export function LeadPrChart({ metrics }: { metrics: Metrics }) {
         <Tooltip {...tooltipStyle} formatter={(v: number) => v?.toFixed(3)} />
         <Legend wrapperStyle={legendStyle} />
         {methods.map((m, i) => (
-          <Line key={m} type="monotone" dataKey={m} dot={false} isAnimationActive={false} {...seriesStyle(m, i)} />
+          <Line key={m} type="monotone" dataKey={m} name={displayName(m)} dot={false} isAnimationActive={false} {...seriesStyle(m, i)} />
         ))}
       </LineChart>
     </ChartWell>
@@ -61,7 +62,7 @@ export function ReliabilityChart({ reliability }: { reliability: Record<string, 
         <Legend wrapperStyle={legendStyle} verticalAlign="top" />
         <ReferenceLine segment={[{ x: 0, y: 0 }, { x: top, y: top }]} stroke={HEX.grid} strokeWidth={1.5} />
         {methods.map((m, i) => (
-          <Line key={m} data={reliability[m]} dataKey="obs_freq" name={m} type="linear" isAnimationActive={false} dot={{ r: m === MODEL ? 4 : 3, fill: seriesStyle(m, i).stroke }} {...seriesStyle(m, i)} />
+          <Line key={m} data={reliability[m]} dataKey="obs_freq" name={displayName(m)} type="linear" isAnimationActive={false} dot={{ r: m === MODEL ? 4 : 3, fill: seriesStyle(m, i).stroke }} {...seriesStyle(m, i)} />
         ))}
       </LineChart>
     </ChartWell>
@@ -105,7 +106,7 @@ export function CostLossChart({ curves, alpha, userLabel }: { curves: Record<str
         <ReferenceLine y={0} stroke={HEX.muted} />
         <ReferenceLine x={at.alpha} stroke={HEX.accent} strokeDasharray="3 3" />
         {methods.map((m, i) => (
-          <Line key={m} dataKey={m} type="monotone" dot={false} isAnimationActive={false} connectNulls {...seriesStyle(m, i)} />
+          <Line key={m} dataKey={m} name={displayName(m)} type="monotone" dot={false} isAnimationActive={false} connectNulls {...seriesStyle(m, i)} />
         ))}
         <ReferenceDot x={at.alpha} y={(at as Record<string, number>)[MODEL] ?? 0} r={5} fill={HEX.accent} stroke="none" />
       </LineChart>

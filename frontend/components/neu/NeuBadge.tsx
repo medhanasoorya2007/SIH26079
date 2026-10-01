@@ -21,12 +21,12 @@ export function RiskBadge({ risk, className }: { risk: Risk; className?: string 
   );
 }
 
-/** CONFIDENTLY WRONG: spread says trust, BustGuard says bust. Pulsing inset ring + icon + text. */
+/** CONFIDENTLY WRONG: spread says trust, Predicta says bust. Pulsing inset ring + icon + text. */
 export function CwBadge({ className, compact }: { className?: string; compact?: boolean }) {
   return (
     <NeuBadge
       className={cn("animate-cw-pulse text-accent-text", className)}
-      title="The spread says trust this forecast, but BustGuard rates the bust risk HIGH and similar past cases agree"
+      title="The spread says trust this forecast, but Predicta rates the bust risk HIGH and similar past cases agree"
     >
       <ShieldAlert aria-hidden className="h-3.5 w-3.5" />
       {compact ? (

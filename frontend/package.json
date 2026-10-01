@@ -2,7 +2,7 @@
   "name": "bustguard-web",
   "version": "0.2.0",
   "private": true,
-  "description": "BustGuard forecaster instrument panel (Next.js 14, neumorphic design system)",
+  "description": "Predicta forecaster instrument panel (Next.js 14, neumorphic design system)",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
