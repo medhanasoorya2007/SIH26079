@@ -13,12 +13,18 @@ export function LeadDaySlider({
   leads,
   summary,
   label = "Forecast lead day",
+  formatValue = (v: number) => `Day ${v}`,
+  formatTick = (v: number) => String(v),
 }: {
   value: number;
   onChange: (lead: number) => void;
   leads: number[];
   summary?: LeadSummary[];
   label?: string;
+  /** big label on the right (default "Day N") */
+  formatValue?: (v: number) => string;
+  /** label under each tick (default the number itself) */
+  formatTick?: (v: number) => string;
 }) {
   const reduce = useReducedMotion();
   const track = useRef<HTMLDivElement>(null);
@@ -47,7 +53,7 @@ export function LeadDaySlider({
     <div>
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-sm font-semibold text-muted">{label}</span>
-        <span className="font-display text-2xl font-extrabold tabular text-fg">Day {value}</span>
+        <span className="font-display text-2xl font-extrabold tabular text-fg">{formatValue(value)}</span>
       </div>
       <div
         role="slider"
@@ -56,7 +62,7 @@ export function LeadDaySlider({
         aria-valuemin={Math.min(...leads)}
         aria-valuemax={Math.max(...leads)}
         aria-valuenow={value}
-        aria-valuetext={`Day ${value}${cur ? `, highest risk ${RISK_LABEL[cur.max_risk].toLowerCase()}, ${cur.n_high} high-risk regions` : ""}`}
+        aria-valuetext={`${formatValue(value)}${cur ? `, highest risk ${RISK_LABEL[cur.max_risk].toLowerCase()}, ${cur.n_high} high-risk regions` : ""}`}
         onKeyDown={onKey}
         onPointerDown={(e) => {
           (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -88,7 +94,7 @@ export function LeadDaySlider({
                   style={{ background: s ? RISK_FILL[s.max_risk] : "var(--grid)" }}
                   title={s ? `${RISK_LABEL[s.max_risk]}: ${s.n_high} high, ${s.n_medium} medium${s.n_cw ? `, ${s.n_cw} confidently wrong` : ""}` : undefined}
                 />
-                {l}
+                <span className="whitespace-nowrap">{formatTick(l)}</span>
               </span>
             );
           })}

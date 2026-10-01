@@ -12,16 +12,20 @@ import { BRAND } from "@/lib/brand";
  * Day 10 towards the event. The day Predicta's continuous warning began is highlighted. */
 export function ReplayCompare({ region, validDate, step, setStep }: { region: ReplayRegion; validDate: string; step: number; setStep: (n: number) => void }) {
   const reduce = useReducedMotion();
-  const steps = region.steps;
-  const leadOrder = steps.map((s) => s.lead_day).sort((a, b) => a - b); // Day 1 -> Day 10
-  // `step` = the lead day selected on the slider; show forecasts Day 1 .. that day
-  const currentLead = leadOrder.includes(step) ? step : leadOrder[0];
-  const shown = steps.filter((s) => s.lead_day <= currentLead).sort((a, b) => a.lead_day - b.lead_day);
+  // forecasts for this valid day in time order: oldest issue (longest lead) first
+  const chrono = [...region.steps].sort((a, b) => a.init_date.localeCompare(b.init_date));
+  const positions = chrono.map((_, i) => i + 1);
+  // `step` = slider position; show forecasts issued from the oldest up to that position
+  const pos = Math.min(Math.max(1, step), chrono.length);
+  const shown = chrono.slice(0, pos);
   const firstWarn = region.first_warning.BustGuard;
   const firstSpread = region.first_warning.spread;
-  const done = true; // Day 1 (the last forecast before the event) is always in view
-  const dots = steps.map((s) => ({
-    lead_day: s.lead_day,
+  const done = pos >= chrono.length; // outcome revealed once the last forecast is reached
+  const ahead = (lead: number) => `${lead} day${lead === 1 ? "" : "s"} ahead`;
+  const issued = (iso?: string) => fmtDate(iso, { day: "numeric", month: "short" });
+  const byLead = (lead: number) => chrono.find((c) => c.lead_day === lead);
+  const dots = chrono.map((s, i) => ({
+    lead_day: i + 1,
     max_risk: s.model_risk,
     n_high: s.model_risk === "High" ? 1 : 0,
     n_medium: s.model_risk === "Medium" ? 1 : 0,
@@ -31,14 +35,16 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
   return (
     <div className="space-y-6">
       <LeadDaySlider
-        label={`Forecasts for ${fmtDate(validDate)} from Day 1 up to the selected day; dots = ${BRAND} risk`}
-        value={currentLead}
+        label={`Forecasts for ${fmtDate(validDate)}, in the order they were issued; dots = ${BRAND} risk`}
+        value={pos}
         onChange={setStep}
-        leads={leadOrder}
+        leads={positions}
         summary={dots}
+        formatValue={(v) => `${issued(chrono[v - 1]?.init_date)} · ${ahead(chrono[v - 1]?.lead_day ?? 0)}`}
+        formatTick={(v) => issued(chrono[v - 1]?.init_date)}
       />
       <div className="grid grid-cols-[6rem_1fr_1fr] gap-3 text-[11px] font-bold uppercase tracking-wide text-muted">
-        <span>Lead · issued</span>
+        <span>Issued · lead</span>
         <span>Ensemble spread says</span>
         <span>{BRAND} says</span>
       </div>
@@ -54,8 +60,8 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
               className={cn("grid grid-cols-[6rem_1fr_1fr] items-center gap-3 rounded-panel p-2", warnStart && "shadow-neu-inset-sm ring-2 ring-accent")}
             >
               <span className="text-xs font-semibold tabular text-fg">
-                Day {s.lead_day}
-                <span className="block font-normal text-muted">issued {fmtDate(s.init_date, { day: "numeric", month: "short" })}</span>
+                Issued {issued(s.init_date)}
+                <span className="block font-normal text-muted">{ahead(s.lead_day)}</span>
               </span>
               <NeuWell shallow className="p-3 text-xs">
                 <div className={cn("font-semibold", s.spread_flag ? "text-risk-medium-text" : "text-fg")}>
@@ -78,16 +84,16 @@ export function ReplayCompare({ region, validDate, step, setStep }: { region: Re
           <div className="flex items-center gap-2 font-bold">
             {region.busted_day1 ? <OctagonAlert className="h-4 w-4 text-risk-high-text" aria-hidden /> : <CircleCheck className="h-4 w-4 text-risk-low-text" aria-hidden />}
             <span className={region.busted_day1 ? "text-risk-high-text" : "text-risk-low-text"}>
-              Outcome: IMD observed {mm(region.obs)}; Day-1 forecast {mm(steps[steps.length - 1]?.fc)}: {region.busted_day1 ? "BUST" : "no bust"}
+              Outcome: IMD observed {mm(region.obs)}; forecast issued {issued(byLead(1)?.init_date)} {mm(byLead(1)?.fc)}: {region.busted_day1 ? "BUST" : "no bust"}
             </span>
           </div>
           <div className="text-xs text-muted">
-            {BRAND} warning held continuously from {firstWarn ? `Day ${firstWarn}` : "— (no continuous warning)"}; spread from {firstSpread ? `Day ${firstSpread}` : "— (never)"}.
+            {BRAND} warning held continuously from {firstWarn ? `${issued(byLead(firstWarn)?.init_date)} (${ahead(firstWarn)})` : "— (no continuous warning)"}; spread from {firstSpread ? `${issued(byLead(firstSpread)?.init_date)} (${ahead(firstSpread)})` : "— (never)"}.
           </div>
         </NeuWell>
       ) : (
         <p className="flex items-center gap-2 text-xs text-muted">
-          <ShieldQuestion className="h-4 w-4" aria-hidden /> Outcome hidden until you scrub to Day 1.
+          <ShieldQuestion className="h-4 w-4" aria-hidden /> Outcome hidden until you reach the last forecast (1 day ahead).
         </p>
       )}
     </div>
